@@ -20,5 +20,5 @@
 *.out
 *.app
 *.rlib
-build
+target/*
 metrics.json

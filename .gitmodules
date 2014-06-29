@@ -1,6 +1,0 @@
-[submodule "lib/criterion"]
-	path = lib/criterion
-	url = git@github.com:japaric/criterion.rs.git
-[submodule "lib/quickcheck"]
-	path = lib/quickcheck
-	url = git@github.com:BurntSushi/quickcheck.git

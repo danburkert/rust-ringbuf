@@ -1,17 +1,18 @@
-#![crate_id = "sort-bench"]
+#![crate_id = "ringbuf-bench"]
 #![crate_type = "bin"]
+
 
 extern crate debug;
 extern crate test;
 extern crate core;
 extern crate collections;
 
-extern crate sort;
+extern crate ringbuf;
 extern crate criterion;
 
 use collections::Deque;
 //use collections::RingBuf;
-use sort::ringbuf::RingBuf;
+use ringbuf::RingBuf;
 
 use std::rand::StdRng;
 use std::rand::Rng;
@@ -31,10 +32,10 @@ fn main() {
 }
 
 fn get_rng() -> StdRng {
-    let mut rng: StdRng = SeedableRng::from_seed(&[1, 2, 3, 4]);
-    rng
+    SeedableRng::from_seed(&[1, 2, 3, 4])
 }
 
+#[allow(dead_code)]
 fn allocate(b: &mut Bencher, capacity: uint) {
     b.iter(|| {
         let mut rb = RingBuf::<int>::with_capacity(capacity);
@@ -42,6 +43,7 @@ fn allocate(b: &mut Bencher, capacity: uint) {
     })
 }
 
+#[allow(dead_code)]
 fn push_back_pre_allocate(b: &mut Bencher, capacity: uint) {
     let items: Vec<int> = get_rng().gen_iter::<int>().take(capacity).collect();
     b.iter(|| {
@@ -53,6 +55,7 @@ fn push_back_pre_allocate(b: &mut Bencher, capacity: uint) {
     })
 }
 
+#[allow(dead_code)]
 fn push_back_default_allocate(b: &mut Bencher, capacity: uint) {
     let items: Vec<int> = get_rng().gen_iter::<int>().take(capacity).collect();
     b.iter(|| {
@@ -64,6 +67,7 @@ fn push_back_default_allocate(b: &mut Bencher, capacity: uint) {
     })
 }
 
+#[allow(dead_code)]
 fn push_front_pre_allocate(b: &mut Bencher, capacity: uint) {
     let items: Vec<int> = get_rng().gen_iter::<int>().take(capacity).collect();
     b.iter(|| {
@@ -75,6 +79,7 @@ fn push_front_pre_allocate(b: &mut Bencher, capacity: uint) {
     })
 }
 
+#[allow(dead_code)]
 fn push_front_default_allocate(b: &mut Bencher, capacity: uint) {
     let items: Vec<int> = get_rng().gen_iter::<int>().take(capacity).collect();
     b.iter(|| {
@@ -86,6 +91,7 @@ fn push_front_default_allocate(b: &mut Bencher, capacity: uint) {
     })
 }
 
+#[allow(dead_code)]
 fn iterate(b: &mut Bencher, capacity: uint) {
     let mut rb = RingBuf::with_capacity(capacity);
     for element in get_rng().gen_iter::<int>().take(capacity) {
@@ -99,6 +105,7 @@ fn iterate(b: &mut Bencher, capacity: uint) {
     })
 }
 
+#[allow(dead_code)]
 fn get(b: &mut Bencher, capacity: uint) {
     let mut rb = RingBuf::with_capacity(capacity);
     for element in get_rng().gen_iter::<int>().take(capacity) {
