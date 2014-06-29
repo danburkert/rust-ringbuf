@@ -20,6 +20,7 @@ use std::rand::SeedableRng;
 
 use criterion::{Bencher, Criterion};
 
+#[allow(dead_code)]
 fn main() {
     let mut b = Criterion::new();
     let capacities = &[8, 128, 1024, 32 * 1024];

@@ -6,11 +6,9 @@ authors = [ "dan@danburkert.com" ]
 
 [[lib]]
 name = "ringbuf"
-path = "src/lib.rs"
 
-#[[bin]]
-#name = "ringbuf-bench" # the name of the executable to generate
-#path = "bench/bin.rs"
+[[bin]]
+name = "bench"
 
 [dependencies.criterion]
 git = "https://github.com/danburkert/criterion.rs.git"
