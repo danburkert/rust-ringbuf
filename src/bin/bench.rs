@@ -10,13 +10,15 @@ extern crate collections;
 extern crate ringbuf;
 extern crate criterion;
 
-use collections::Deque;
-//use collections::RingBuf;
-use ringbuf::RingBuf;
+// Switch from benchmarking the stdlib implementation to the new
+// implementation by changing the import
+use collections::RingBuf;
+//use ringbuf::RingBuf;
 
-use std::rand::StdRng;
+use collections::Deque;
 use std::rand::Rng;
 use std::rand::SeedableRng;
+use std::rand::StdRng;
 
 use criterion::{Bencher, Criterion};
 
@@ -27,7 +29,7 @@ fn main() {
     b.bench_group("push_back_default_allocate", capacities, push_back_default_allocate);
     b.bench_group("push_back_pre_allocate", capacities, push_back_pre_allocate);
     b.bench_group("push_pre_default_allocate", capacities, push_front_default_allocate);
-    b.bench_group("push_pre_pre_allocate", capacities, push_front_pre_allocate);
+    b.bench_group("push_pre_allocate", capacities, push_front_pre_allocate);
     b.bench_group("iterate", capacities, iterate);
     b.bench_group("get", capacities, get);
 }

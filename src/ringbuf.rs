@@ -26,9 +26,6 @@ use std::rt::heap::{allocate, deallocate};
 use std::slice;
 use std::uint;
 
-static INITIAL_CAPACITY: uint = 8u; // 2^3
-static MINIMUM_CAPACITY: uint = 2u;
-
 /// RingBuf is a circular buffer that implements Deque.
 ///
 /// # Examples
@@ -76,7 +73,7 @@ impl<T> RingBuf<T> {
 
     /// Construct a new, empty `RingBuf`.
     ///
-    /// The ring buffer will allocate an initial capacity.
+    /// The ring buffer will not allocate until elements are pushed onto it.
     ///
     /// # Example
     ///
@@ -87,13 +84,13 @@ impl<T> RingBuf<T> {
     /// let mut ringbuf: RingBuf<int> = RingBuf::new();
     /// ```
     pub fn new() -> RingBuf<T> {
-        RingBuf::with_capacity(INITIAL_CAPACITY)
+        RingBuf::with_capacity(0)
     }
 
     /// Constructs a new, empty `RingBuf` with the specified capacity.
     ///
     /// The ring will be able to hold exactly `capacity` elements without
-    /// reallocating.
+    /// reallocating. If `capacity` is 0, the ringbuf will not allocate.
     ///
     /// # Example
     ///
@@ -104,8 +101,8 @@ impl<T> RingBuf<T> {
     pub fn with_capacity(capacity: uint) -> RingBuf<T> {
         if mem::size_of::<T>() == 0 {
             RingBuf { lo: 0, len: 0, cap: uint::MAX, ptr: 0 as *mut T }
-        } else if capacity < MINIMUM_CAPACITY {
-            RingBuf::with_capacity(MINIMUM_CAPACITY)
+        } else if capacity == 0 {
+            RingBuf { lo: 0, len: 0, cap: 0, ptr: 0 as *mut T }
         } else {
             let size = capacity.checked_mul(&mem::size_of::<T>())
                                .expect("capacity overflow");
@@ -415,7 +412,7 @@ impl<T> Deque<T> for RingBuf<T> {
           return
       }
       if self.len == self.cap {
-          let capacity = self.len * 2;
+          let capacity = cmp::max(self.len, 1) * 2;
           self.resize(capacity);
       }
 
@@ -450,7 +447,7 @@ impl<T> Deque<T> for RingBuf<T> {
           return;
       }
       if self.len == self.cap {
-          let capacity = self.len * 2;
+          let capacity = cmp::max(self.len, 1) * 2;
           self.resize(capacity);
       }
 
@@ -705,34 +702,38 @@ impl<T> RingBuf<T> {
 }
 
 impl<T> RingBuf<T> {
-  /// Resize the `RingBuf` to the specified capacity. The new capacity will not
-  /// be less than `MINIMUM_CAPACITY`.
+  /// Resize the `RingBuf` to the specified capacity.
   ///
   /// # Failure
   ///
   /// Fails if the number of elements in the ring buffer is greater than
   /// the requested capacity.
   fn resize(&mut self, capacity: uint) {
-      let cap = cmp::max(capacity, MINIMUM_CAPACITY);
-      assert!(cap >= self.len, "capacity underflow");
+      assert!(capacity >= self.len, "capacity underflow");
 
-      if cap == self.cap { return }
+      if capacity == self.cap { return }
       if mem::size_of::<T>() == 0 { return }
 
       let ptr;
       unsafe {
-          let (slice1, slice2) = self.as_slices();
-          ptr = alloc::<T>(cap) as *mut T;
-          let len1 = slice1.len();
-          ptr::copy_nonoverlapping_memory(ptr, slice1.as_ptr(), len1);
-          ptr::copy_nonoverlapping_memory(ptr.offset(len1 as int),
-                                          slice2.as_ptr(),
-                                          slice2.len());
-          dealloc(self.ptr, self.cap);
+          if capacity == 0 {
+              ptr = 0 as *mut T;
+          } else {
+              let (slice1, slice2) = self.as_slices();
+              ptr = alloc::<T>(capacity) as *mut T;
+              let len1 = slice1.len();
+              ptr::copy_nonoverlapping_memory(ptr, slice1.as_ptr(), len1);
+              ptr::copy_nonoverlapping_memory(ptr.offset(len1 as int),
+                                              slice2.as_ptr(),
+                                              slice2.len());
+          }
+          if self.cap != 0 {
+              dealloc(self.ptr, self.cap);
+          }
       }
 
       self.ptr = ptr;
-      self.cap = cap;
+      self.cap = capacity;
       self.lo = 0;
   }
 
@@ -980,7 +981,7 @@ mod checks {
                                          lo: uint)
                                          -> RingBuf<T> {
         let mut ringbuf = RingBuf::with_capacity(capacity);
-        ringbuf.lo = lo % ringbuf.capacity();
+        ringbuf.lo = if capacity == 0 { 0 } else { lo % capacity };
         for &i in items.iter() {
             ringbuf.push_back(i);
         }
