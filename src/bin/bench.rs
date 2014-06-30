@@ -24,11 +24,11 @@ use criterion::{Bencher, Criterion};
 fn main() {
     let mut b = Criterion::new();
     let capacities = &[8, 128, 1024, 32 * 1024];
-    //b.bench_group("push_back_default_allocate", capacities, push_back_default_allocate);
-    //b.bench_group("push_back_pre_allocate", capacities, push_back_pre_allocate);
-    //b.bench_group("push_pre_default_allocate", capacities, push_front_default_allocate);
-    //b.bench_group("push_pre_pre_allocate", capacities, push_front_pre_allocate);
-    //b.bench_group("iterate", capacities, iterate);
+    b.bench_group("push_back_default_allocate", capacities, push_back_default_allocate);
+    b.bench_group("push_back_pre_allocate", capacities, push_back_pre_allocate);
+    b.bench_group("push_pre_default_allocate", capacities, push_front_default_allocate);
+    b.bench_group("push_pre_pre_allocate", capacities, push_front_pre_allocate);
+    b.bench_group("iterate", capacities, iterate);
     b.bench_group("get", capacities, get);
 }
 

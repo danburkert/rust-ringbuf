@@ -21,8 +21,8 @@ use std::iter::FromIterator;
 use std::mem;
 use std::num;
 use std::ptr;
+use std::raw::Slice;
 use std::rt::heap::{allocate, deallocate};
-use std::slice::raw;
 use std::slice;
 use std::uint;
 
@@ -51,19 +51,19 @@ static MINIMUM_CAPACITY: uint = 2u;
 #[unsafe_no_drop_flag]
 pub struct RingBuf<T> {
 
-  /// The index of the 0th element
-  /// invariant: `0 <= lo < cap`
-  lo: uint,
+    /// The index of the 0th element
+    /// invariant: `0 <= lo < cap`
+    lo: uint,
 
-  /// The number of elements currently in the ring.
-  /// invariant: `0 <= len <= cap`
-  len: uint,
+    /// The number of elements currently in the ring.
+    /// invariant: `0 <= len <= cap`
+    len: uint,
 
-  /// Capacity of the buffer.
-  cap: uint,
+    /// Capacity of the buffer.
+    cap: uint,
 
-  /// Pointer to the start of the buffer
-  ptr: *mut T
+    /// Pointer to the start of the buffer
+    ptr: *mut T
 }
 
 /// RingBuf iterator.
@@ -74,241 +74,241 @@ pub type MutItems<'a, T> = Chain<slice::MutItems<'a, T>, slice::MutItems<'a, T>>
 
 impl<T> RingBuf<T> {
 
-  /// Construct a new, empty `RingBuf`.
-  ///
-  /// The ring buffer will allocate an initial capacity.
-  ///
-  /// # Example
-  ///
-  /// ```rust
-  /// # use collections::RingBuf;
-  /// # use collections::Deque;
-  ///
-  /// let mut ringbuf: RingBuf<int> = RingBuf::new();
-  /// ```
-  pub fn new() -> RingBuf<T> {
-      RingBuf::with_capacity(INITIAL_CAPACITY)
-  }
+    /// Construct a new, empty `RingBuf`.
+    ///
+    /// The ring buffer will allocate an initial capacity.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// # use collections::RingBuf;
+    /// # use collections::Deque;
+    ///
+    /// let mut ringbuf: RingBuf<int> = RingBuf::new();
+    /// ```
+    pub fn new() -> RingBuf<T> {
+        RingBuf::with_capacity(INITIAL_CAPACITY)
+    }
 
-  /// Constructs a new, empty `RingBuf` with the specified capacity.
-  ///
-  /// The ring will be able to hold exactly `capacity` elements without
-  /// reallocating.
-  ///
-  /// # Example
-  ///
-  /// ```rust
-  /// # use collections::ringbuf::RingBuf;
-  /// let ring: RingBuf<int> = RingBuf::with_capacity(10);
-  /// ```
-  pub fn with_capacity(capacity: uint) -> RingBuf<T> {
-      if mem::size_of::<T>() == 0 {
-          RingBuf { lo: 0, len: 0, cap: uint::MAX, ptr: 0 as *mut T }
-      } else if capacity < MINIMUM_CAPACITY {
-          RingBuf::with_capacity(MINIMUM_CAPACITY)
-      } else {
-          let size = capacity.checked_mul(&mem::size_of::<T>())
-                             .expect("capacity overflow");
-          let ptr = unsafe { allocate(size, mem::min_align_of::<T>()) };
-          RingBuf { lo: 0, len: 0, cap: capacity, ptr: ptr as *mut T }
-      }
-  }
+    /// Constructs a new, empty `RingBuf` with the specified capacity.
+    ///
+    /// The ring will be able to hold exactly `capacity` elements without
+    /// reallocating.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// # use collections::ringbuf::RingBuf;
+    /// let ring: RingBuf<int> = RingBuf::with_capacity(10);
+    /// ```
+    pub fn with_capacity(capacity: uint) -> RingBuf<T> {
+        if mem::size_of::<T>() == 0 {
+            RingBuf { lo: 0, len: 0, cap: uint::MAX, ptr: 0 as *mut T }
+        } else if capacity < MINIMUM_CAPACITY {
+            RingBuf::with_capacity(MINIMUM_CAPACITY)
+        } else {
+            let size = capacity.checked_mul(&mem::size_of::<T>())
+                               .expect("capacity overflow");
+            let ptr = unsafe { allocate(size, mem::min_align_of::<T>()) };
+            RingBuf { lo: 0, len: 0, cap: capacity, ptr: ptr as *mut T }
+        }
+    }
 
-  /// Constructs a new `RingBuf` from the elements in a `Vec`.
-  ///
-  /// No copying will be done, and the new ring buffer will have the same
-  /// capacity as the provided vec.
-  ///
-  /// # Example
-  ///
-  /// ```rust
-  /// #use collections.ringbuf.RingBuf;
-  /// let mut vec = vec!(1, 2, 3);
-  /// let ringbuf = RingBuf::from_vec(vec);
-  /// ```
-  pub fn from_vec(mut vec: Vec<T>) -> RingBuf<T> {
-      let len = vec.len();
-      let cap = vec.capacity();
-      let ptr = vec.as_mut_ptr();
-      let ringbuf = RingBuf { lo: 0, len: len, cap: cap, ptr: ptr };
-      unsafe { mem::forget(vec); }
-      ringbuf
-  }
+    /// Constructs a new `RingBuf` from the elements in a `Vec`.
+    ///
+    /// No copying will be done, and the new ring buffer will have the same
+    /// capacity as the provided vec.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// #use collections.ringbuf.RingBuf;
+    /// let mut vec = vec!(1, 2, 3);
+    /// let ringbuf = RingBuf::from_vec(vec);
+    /// ```
+    pub fn from_vec(mut vec: Vec<T>) -> RingBuf<T> {
+        let len = vec.len();
+        let cap = vec.capacity();
+        let ptr = vec.as_mut_ptr();
+        let ringbuf = RingBuf { lo: 0, len: len, cap: cap, ptr: ptr };
+        unsafe { mem::forget(vec); }
+        ringbuf
+    }
 
-  /// Constructs a new `Vec` from the elements in a `RingBuf`.
-  ///
-  /// May require copying and temporary allocation.
-  ///
-  /// # Example
-  ///
-  /// ```rust
-  /// #use collections.ringbuf.RingBuf;
-  /// let mut ringbuf = RingBuf::new();
-  /// ringbuf.push_front(1);
-  /// ringbuf.push_back(2);
-  /// let vec = ringbuf.into_vec();
-  /// ```
-  pub fn into_vec(mut self) -> Vec<T> {
-      self.reset();
+    /// Constructs a new `Vec` from the elements in a `RingBuf`.
+    ///
+    /// May require copying and temporary allocation.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// #use collections.ringbuf.RingBuf;
+    /// let mut ringbuf = RingBuf::new();
+    /// ringbuf.push_front(1);
+    /// ringbuf.push_back(2);
+    /// let vec = ringbuf.into_vec();
+    /// ```
+    pub fn into_vec(mut self) -> Vec<T> {
+        self.reset();
 
-      let vec;
-      unsafe {
-          vec = Vec::from_raw_parts(self.len, self.cap, self.ptr);
-          mem::forget(self);
-      }
-      vec
-  }
+        let vec;
+        unsafe {
+            vec = Vec::from_raw_parts(self.len, self.cap, self.ptr);
+            mem::forget(self);
+        }
+        vec
+    }
 
-  /// Returns a reference to the value at index `index`.
-  ///
-  /// # Failure
-  ///
-  /// Fails if `index` is out of bounds.
-  ///
-  /// ```rust
-  /// let ringbuf = RingBuff::from_vec(vec!(1, 2, 3));
-  /// assert!(ringbuf.get(1) == &2);
-  /// ```
-  pub fn get<'a>(&'a self, index: uint) -> &'a T {
-      assert!(index < self.len);
-      let offset = self.get_offset(index) as int;
-      unsafe { &*self.ptr.offset(offset) }
-  }
+    /// Returns a reference to the value at index `index`.
+    ///
+    /// # Failure
+    ///
+    /// Fails if `index` is out of bounds.
+    ///
+    /// ```rust
+    /// let ringbuf = RingBuff::from_vec(vec!(1, 2, 3));
+    /// assert!(ringbuf.get(1) == &2);
+    /// ```
+    pub fn get<'a>(&'a self, index: uint) -> &'a T {
+        assert!(index < self.len);
+        let offset = self.get_offset(index) as int;
+        unsafe { &*self.ptr.offset(offset) }
+    }
 
-  /// Returns a mutable reference to the value at index `index`.
-  ///
-  /// # Failure
-  ///
-  /// Fails if `index` is out of bounds
-  ///
-  /// ```rust
-  /// let mut ringbuf = RingBuff::from_vec(vec!(1, 2, 3));
-  /// *ringbuf.get_mut(1) = 4;
-  /// assert_eq!(ringbuf.get(1), 4);
-  /// ```
-  pub fn get_mut<'a>(&'a mut self, index: uint) -> &'a mut T {
-      assert!(index < self.len);
-      let offset = self.get_offset(index) as int;
-      unsafe { &mut *self.ptr.offset(offset) }
-  }
+    /// Returns a mutable reference to the value at index `index`.
+    ///
+    /// # Failure
+    ///
+    /// Fails if `index` is out of bounds
+    ///
+    /// ```rust
+    /// let mut ringbuf = RingBuff::from_vec(vec!(1, 2, 3));
+    /// *ringbuf.get_mut(1) = 4;
+    /// assert_eq!(ringbuf.get(1), 4);
+    /// ```
+    pub fn get_mut<'a>(&'a mut self, index: uint) -> &'a mut T {
+        assert!(index < self.len);
+        let offset = self.get_offset(index) as int;
+        unsafe { &mut *self.ptr.offset(offset) }
+    }
 
-  /// Swap elements at indices `i` and `j`
-  ///
-  /// `i` and `j` may be equal.
-  ///
-  /// # Failure
-  ///
-  /// Fails if there is no element with the given index
-  pub fn swap(&mut self, i: uint, j: uint) {
-      assert!(i < self.len());
-      assert!(j < self.len());
-      let i_offset = self.get_offset(i) as int;
-      let j_offset = self.get_offset(j) as int;
-      unsafe {
-          ptr::swap(self.ptr.offset(i_offset), self.ptr.offset(j_offset));
-      }
-  }
+    /// Swap elements at indices `i` and `j`
+    ///
+    /// `i` and `j` may be equal.
+    ///
+    /// # Failure
+    ///
+    /// Fails if there is no element with the given index
+    pub fn swap(&mut self, i: uint, j: uint) {
+        assert!(i < self.len());
+        assert!(j < self.len());
+        let i_offset = self.get_offset(i) as int;
+        let j_offset = self.get_offset(j) as int;
+        unsafe {
+            ptr::swap(self.ptr.offset(i_offset), self.ptr.offset(j_offset));
+        }
+    }
 
-  /// Shorten a ring buffer, dropping excess elements.
-  ///
-  /// If `len` is greater than the ring buffer's current length, this has no
-  /// effect.
-  ///
-  /// # Example
-  ///
-  /// ```rust
-  /// let mut ringbuf = RingBuf::from_vec(vec!(1, 2, 3, 4));
-  /// vec.truncate(2);
-  /// assert_eq!(vec, vec!(1, 2));
-  /// ```
-  pub fn truncate(&mut self, len: uint) {
-      unsafe {
-          // drop any extra elements
-          while len < self.len {
-              // decrement len before the read(), so a failure on Drop doesn't
-              // re-drop the just-failed value.
-              self.len -= 1;
-              let offset = self.get_offset(self.len) as int;
-              ptr::read(self.ptr.offset(offset) as *T);
-          }
-      }
-  }
+    /// Shorten a ring buffer, dropping excess elements.
+    ///
+    /// If `len` is greater than the ring buffer's current length, this has no
+    /// effect.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// let mut ringbuf = RingBuf::from_vec(vec!(1, 2, 3, 4));
+    /// vec.truncate(2);
+    /// assert_eq!(vec, vec!(1, 2));
+    /// ```
+    pub fn truncate(&mut self, len: uint) {
+        unsafe {
+            // drop any extra elements
+            while len < self.len {
+                // decrement len before the read(), so a failure on Drop doesn't
+                // re-drop the just-failed value.
+                self.len -= 1;
+                let offset = self.get_offset(self.len) as int;
+                ptr::read(self.ptr.offset(offset) as *const T);
+            }
+        }
+    }
 
-  /// Work with `self` as a pair of slices.
-  ///
-  /// Either or both slices may be empty.
-  ///
-  /// # Example
-  ///
-  /// ```rust
-  /// let mut rb = RingBuf::new();
-  /// rb.push_back(1);
-  /// rb.push_front(0);
-  /// let (slice1, slice2) = rb.as_slices();
-  /// ```
-  #[inline]
-  pub fn as_slices<'a>(&'a self) -> (&'a [T], &'a [T]) {
-      let (ptr1, len1, ptr2, len2) = get_slice_ptrs(self);
-      unsafe {
-          (raw::buf_as_slice(ptr1 as *T, len1, |x| mem::transmute(x)),
-           raw::buf_as_slice(ptr2 as *T, len2, |x| mem::transmute(x)))
-      }
-  }
+    /// Work with `self` as a pair of slices.
+    ///
+    /// Either or both slices may be empty.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// let mut rb = RingBuf::new();
+    /// rb.push_back(1);
+    /// rb.push_front(0);
+    /// let (slice1, slice2) = rb.as_slices();
+    /// ```
+    #[inline]
+    pub fn as_slices<'a>(&'a self) -> (&'a [T], &'a [T]) {
+        let (ptr1, len1, ptr2, len2) = get_slice_ptrs(self);
+        unsafe {
+            (mem::transmute(Slice { data: ptr1, len: len1 }),
+             mem::transmute(Slice { data: ptr2, len: len2 }))
+        }
+    }
 
-  /// Work with `self` as a pair of mutable slices.
-  ///
-  /// Either or both slices may be empty.
-  ///
-  /// # Example
-  ///
-  /// ```rust
-  /// let mut rb = RingBuf::new();
-  /// rb.push_front(1);
-  /// rb.push_back(2);
-  /// let (slice1, slice2) = rb.as_mut_slices();
-  /// ```
-  #[inline]
-  pub fn as_mut_slices<'a>(&'a mut self) -> (&'a mut [T], &'a mut [T]) {
-      let (ptr1, len1, ptr2, len2) = get_slice_ptrs(self);
-      unsafe {
-          (raw::mut_buf_as_slice(ptr1, len1, |x| mem::transmute(x)),
-           raw::mut_buf_as_slice(ptr2, len2, |x| mem::transmute(x)))
-      }
-  }
+    /// Work with `self` as a pair of mutable slices.
+    ///
+    /// Either or both slices may be empty.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// let mut rb = RingBuf::new();
+    /// rb.push_front(1);
+    /// rb.push_back(2);
+    /// let (slice1, slice2) = rb.as_mut_slices();
+    /// ```
+    #[inline]
+    pub fn as_mut_slices<'a>(&'a mut self) -> (&'a mut [T], &'a mut [T]) {
+        let (ptr1, len1, ptr2, len2) = get_slice_ptrs(self);
+        unsafe {
+            (mem::transmute(Slice { data: ptr1, len: len1 }),
+             mem::transmute(Slice { data: ptr2, len: len2 }))
+        }
+    }
 
-  /// Returns an iterator over references to the elements of the ring buffer
-  /// in order.
-  ///
-  /// # Example
-  ///
-  /// ```rust
-  /// let ringbuf = RingBuff::from_vec(vec!(1, 2, 3));
-  /// for &num in ringbuf.iter() {
-  ///     println!("{}", num);
-  /// }
-  /// ```
-  #[inline]
-  pub fn iter<'a>(&'a self) -> Items<'a, T> {
-      let (slice1, slice2) = self.as_slices();
-      slice1.iter().chain(slice2.iter())
-  }
+    /// Returns an iterator over references to the elements of the ring buffer
+    /// in order.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// let ringbuf = RingBuff::from_vec(vec!(1, 2, 3));
+    /// for &num in ringbuf.iter() {
+    ///     println!("{}", num);
+    /// }
+    /// ```
+    #[inline]
+    pub fn iter<'a>(&'a self) -> Items<'a, T> {
+        let (slice1, slice2) = self.as_slices();
+        slice1.iter().chain(slice2.iter())
+    }
 
-  /// Returns an iterator over mutable references to the elements of the
-  /// ring buffer in order.
-  ///
-  /// # Example
-  ///
-  /// ```rust
-  /// let mut ringbuf = RingBuff::from_vec(vec!(1, 2, 3));
-  /// for num in ringbuf.mut_iter() {
-  ///     *num = 0;
-  /// }
-  /// ```
-  #[inline]
-  pub fn mut_iter<'a>(&'a mut self) -> MutItems<'a,T> {
-      let (slice1, slice2) = self.as_mut_slices();
-      slice1.mut_iter().chain(slice2.mut_iter())
-  }
+    /// Returns an iterator over mutable references to the elements of the
+    /// ring buffer in order.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// let mut ringbuf = RingBuff::from_vec(vec!(1, 2, 3));
+    /// for num in ringbuf.mut_iter() {
+    ///     *num = 0;
+    /// }
+    /// ```
+    #[inline]
+    pub fn mut_iter<'a>(&'a mut self) -> MutItems<'a,T> {
+        let (slice1, slice2) = self.as_mut_slices();
+        slice1.mut_iter().chain(slice2.mut_iter())
+    }
 
 
     /// Creates a consuming iterator, that is, one that moves each
@@ -339,8 +339,9 @@ impl<T> RingBuf<T> {
 
 }
 
+/// Calculates the start and length of the slices into this ringbuf.
 #[inline]
-fn get_slice_ptrs<T>(ringbuf: &RingBuf<T>) -> (*mut T, uint, *mut T, uint) {
+fn get_slice_ptrs<T>(ringbuf: &RingBuf<T>) -> (*const T, uint, *const T, uint) {
   let ptr1;
   let ptr2;
   let len1;
@@ -358,7 +359,7 @@ fn get_slice_ptrs<T>(ringbuf: &RingBuf<T>) -> (*mut T, uint, *mut T, uint) {
           len2 = 0;
       }
   }
-  (ptr1, len1, ptr2, len2)
+  (ptr1 as *const T, len1, ptr2 as *const T, len2)
 }
 
 impl<T> Mutable for RingBuf<T> {
@@ -481,7 +482,7 @@ impl<T> Deque<T> for RingBuf<T> {
           unsafe {
               let offset = self.get_offset(self.len - 1) as int;
               self.len -= 1;
-              Some(ptr::read(self.ptr.offset(offset) as *T))
+              Some(ptr::read(self.ptr.offset(offset) as *const T))
           }
       }
   }
@@ -506,7 +507,7 @@ impl<T> Deque<T> for RingBuf<T> {
               let offset = self.get_offset(0) as int;
               self.lo = self.get_offset(1);
               self.len -= 1;
-              Some(ptr::read(self.ptr.offset(offset) as *T))
+              Some(ptr::read(self.ptr.offset(offset) as *const T))
           }
       }
   }
@@ -787,7 +788,7 @@ impl<T> RingBuf<T> {
               // +-+-+-+-+-+-+-+
               unsafe {
                   ptr::copy_memory(self.ptr,
-                                   self.ptr.offset(self.lo as int) as *T,
+                                   self.ptr.offset(self.lo as int) as *const T,
                                    self.len);
               }
 
@@ -825,7 +826,7 @@ impl<T> RingBuf<T> {
                                    slice2.as_ptr(),
                                    len2);
                   ptr::copy_nonoverlapping_memory(self.ptr,
-                                                  tmp as *T,
+                                                  tmp as *const T,
                                                   len1);
                   dealloc(tmp, len1);
               }
@@ -846,7 +847,7 @@ impl<T> RingBuf<T> {
                                    slice1.as_ptr(),
                                    len1);
                   ptr::copy_nonoverlapping_memory(self.ptr.offset(len1 as int),
-                                                  tmp as *T,
+                                                  tmp as *const T,
                                                   len2);
                   dealloc(tmp, len2);
               }
@@ -1125,4 +1126,30 @@ mod checks {
       quickcheck(prop);
   }
 
+  #[test]
+  fn check_iter() {
+      fn prop(rb: RingBuf<int>) -> bool {
+          rb.clone().iter().zip(rb.into_vec().iter()).all(|(a, b)| a == b)
+      }
+
+      quickcheck(prop);
+  }
+
+  #[test]
+  fn check_mut_iter() {
+      fn prop(rb: RingBuf<int>) -> bool {
+          rb.clone().mut_iter().zip(rb.into_vec().mut_iter()).all(|(a, b)| a == b)
+      }
+
+      quickcheck(prop);
+  }
+
+  #[test]
+  fn check_move_iter() {
+      fn prop(rb: RingBuf<int>) -> bool {
+          rb.clone().move_iter().zip(rb.into_vec().move_iter()).all(|(a, b)| a == b)
+      }
+
+      quickcheck(prop);
+  }
 }
