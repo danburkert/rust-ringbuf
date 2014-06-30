@@ -339,582 +339,582 @@ impl<T> RingBuf<T> {
 /// Calculates the start and length of the slices into this ringbuf.
 #[inline]
 fn get_slice_ptrs<T>(ringbuf: &RingBuf<T>) -> (*const T, uint, *const T, uint) {
-  let ptr1;
-  let ptr2;
-  let len1;
-  let len2;
-  unsafe {
-      if ringbuf.lo > ringbuf.cap - ringbuf.len {
-          ptr1 = ringbuf.ptr.offset(ringbuf.lo as int);
-          ptr2 = ringbuf.ptr;
-          len1 = ringbuf.cap - ringbuf.lo;
-          len2 = ringbuf.len - len1;
-      } else {
-          ptr1 = ringbuf.ptr.offset(ringbuf.lo as int);
-          ptr2 = ringbuf.ptr;
-          len1 = ringbuf.len;
-          len2 = 0;
-      }
-  }
-  (ptr1 as *const T, len1, ptr2 as *const T, len2)
+    let ptr1;
+    let ptr2;
+    let len1;
+    let len2;
+    unsafe {
+        if ringbuf.lo > ringbuf.cap - ringbuf.len {
+            ptr1 = ringbuf.ptr.offset(ringbuf.lo as int);
+            ptr2 = ringbuf.ptr;
+            len1 = ringbuf.cap - ringbuf.lo;
+            len2 = ringbuf.len - len1;
+        } else {
+            ptr1 = ringbuf.ptr.offset(ringbuf.lo as int);
+            ptr2 = ringbuf.ptr;
+            len1 = ringbuf.len;
+            len2 = 0;
+        }
+    }
+    (ptr1 as *const T, len1, ptr2 as *const T, len2)
 }
 
 impl<T> Mutable for RingBuf<T> {
-  #[inline]
-  fn clear(&mut self) {
-      self.truncate(0)
-  }
+    #[inline]
+    fn clear(&mut self) {
+        self.truncate(0)
+    }
 }
 
 impl<T> Deque<T> for RingBuf<T> {
 
-  /// Return a reference to the first element in the `RingBuf`.
-  fn front<'a>(&'a self) -> Option<&'a T> {
-      if self.len > 0 { Some(self.get(0)) } else { None }
-  }
+    /// Return a reference to the first element in the `RingBuf`.
+    fn front<'a>(&'a self) -> Option<&'a T> {
+        if self.len > 0 { Some(self.get(0)) } else { None }
+    }
 
-  /// Return a mutable reference to the first element in the `RingBuf`.
-  fn front_mut<'a>(&'a mut self) -> Option<&'a mut T> {
-      if self.len > 0 { Some(self.get_mut(0)) } else { None }
-  }
+    /// Return a mutable reference to the first element in the `RingBuf`.
+    fn front_mut<'a>(&'a mut self) -> Option<&'a mut T> {
+        if self.len > 0 { Some(self.get_mut(0)) } else { None }
+    }
 
-  /// Return a reference to the last element in the `RingBuf`.
-  fn back<'a>(&'a self) -> Option<&'a T> {
-      if self.len > 0 { Some(self.get(self.len - 1)) } else { None }
-  }
+    /// Return a reference to the last element in the `RingBuf`.
+    fn back<'a>(&'a self) -> Option<&'a T> {
+        if self.len > 0 { Some(self.get(self.len - 1)) } else { None }
+    }
 
-  /// Return a mutable reference to the last element in the `RingBuf`.
-  fn back_mut<'a>(&'a mut self) -> Option<&'a mut T> {
-      let len = self.len;
-      if len > 0 { Some(self.get_mut(len - 1)) } else { None }
-  }
+    /// Return a mutable reference to the last element in the `RingBuf`.
+    fn back_mut<'a>(&'a mut self) -> Option<&'a mut T> {
+        let len = self.len;
+        if len > 0 { Some(self.get_mut(len - 1)) } else { None }
+    }
 
-  /// Append an element to a ring buffer.
-  ///
-  /// # Failure
-  ///
-  /// Fails if the number of elements in the ring buffer overflows a `uint`.
-  ///
-  /// # Example
-  ///
-  /// ```rust
-  /// let mut ringbuf = RingBuf::new();
-  /// ringbuf.push_back(1);
-  /// assert_eq!(Some(&1), ringbuf.back());
-  /// ```
-  #[inline]
-  fn push_back(&mut self, value: T) {
-      if mem::size_of::<T>() == 0 {
-          // zero-size types consume no memory, so we can't rely on the
-          // address space running out
-          self.len = self.len.checked_add(&1).expect("length overflow");
-          unsafe { mem::forget(value); }
-          return
-      }
-      if self.len == self.cap {
-          let capacity = cmp::max(self.len, 1) * 2;
-          self.resize(capacity);
-      }
+    /// Append an element to a ring buffer.
+    ///
+    /// # Failure
+    ///
+    /// Fails if the number of elements in the ring buffer overflows a `uint`.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// let mut ringbuf = RingBuf::new();
+    /// ringbuf.push_back(1);
+    /// assert_eq!(Some(&1), ringbuf.back());
+    /// ```
+    #[inline]
+    fn push_back(&mut self, value: T) {
+        if mem::size_of::<T>() == 0 {
+            // zero-size types consume no memory, so we can't rely on the
+            // address space running out
+            self.len = self.len.checked_add(&1).expect("length overflow");
+            unsafe { mem::forget(value); }
+            return
+        }
+        if self.len == self.cap {
+            let capacity = cmp::max(self.len, 1) * 2;
+            self.resize(capacity);
+        }
 
-      unsafe {
-          let offset = self.get_back_offset() as int;
-          let slot = self.ptr.offset(offset);
-          ptr::write(slot, value);
-          self.len += 1;
-      }
-  }
+        unsafe {
+            let offset = self.get_back_offset() as int;
+            let slot = self.ptr.offset(offset);
+            ptr::write(slot, value);
+            self.len += 1;
+        }
+    }
 
-  /// Prepend an element to a ring buffer.
-  ///
-  /// # Failure
-  ///
-  /// Fails if the number of elements in the ring buffer overflows a `uint`.
-  ///
-  /// # Example
-  ///
-  /// ```rust
-  /// let mut ringbuf = RingBuf::new();
-  /// ringbuf.push_back(1);
-  /// assert_eq!(Some(&1), ringbuf.front());
-  /// ```
-  #[inline]
-  fn push_front(&mut self, value: T) {
-      if mem::size_of::<T>() == 0 {
-          // zero-size types consume no memory,
-          // so we can't rely on the address space running out
-          self.len = self.len.checked_add(&1).expect("length overflow");
-          unsafe { mem::forget(value); }
-          return;
-      }
-      if self.len == self.cap {
-          let capacity = cmp::max(self.len, 1) * 2;
-          self.resize(capacity);
-      }
+    /// Prepend an element to a ring buffer.
+    ///
+    /// # Failure
+    ///
+    /// Fails if the number of elements in the ring buffer overflows a `uint`.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// let mut ringbuf = RingBuf::new();
+    /// ringbuf.push_back(1);
+    /// assert_eq!(Some(&1), ringbuf.front());
+    /// ```
+    #[inline]
+    fn push_front(&mut self, value: T) {
+        if mem::size_of::<T>() == 0 {
+            // zero-size types consume no memory,
+            // so we can't rely on the address space running out
+            self.len = self.len.checked_add(&1).expect("length overflow");
+            unsafe { mem::forget(value); }
+            return;
+        }
+        if self.len == self.cap {
+            let capacity = cmp::max(self.len, 1) * 2;
+            self.resize(capacity);
+        }
 
-      unsafe {
-          let offset = self.get_front_offset();
-          let slot = self.ptr.offset(offset as int);
-          ptr::write(slot, value);
-          self.len += 1;
-          self.lo = offset;
-      }
-  }
+        unsafe {
+            let offset = self.get_front_offset();
+            let slot = self.ptr.offset(offset as int);
+            ptr::write(slot, value);
+            self.len += 1;
+            self.lo = offset;
+        }
+    }
 
-  /// Remove the last element from a ring buffer and return it, or `None` if
-  /// it is empty.
-  ///
-  /// # Example
-  ///
-  /// ```rust
-  /// let mut ringbuf = RingBuf::new();
-  /// ringbuf.push_back(1);
-  /// assert_eq!(Some(1), ringbuf.pop_back());
-  /// assert_eq!(None, ringbuf.pop_back());
-  /// ```
-  #[inline]
-  fn pop_back(&mut self) -> Option<T> {
-      if self.len == 0 {
-          None
-      } else {
-          unsafe {
-              let offset = self.get_offset(self.len - 1) as int;
-              self.len -= 1;
-              Some(ptr::read(self.ptr.offset(offset) as *const T))
-          }
-      }
-  }
+    /// Remove the last element from a ring buffer and return it, or `None` if
+    /// it is empty.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// let mut ringbuf = RingBuf::new();
+    /// ringbuf.push_back(1);
+    /// assert_eq!(Some(1), ringbuf.pop_back());
+    /// assert_eq!(None, ringbuf.pop_back());
+    /// ```
+    #[inline]
+    fn pop_back(&mut self) -> Option<T> {
+        if self.len == 0 {
+            None
+        } else {
+            unsafe {
+                let offset = self.get_offset(self.len - 1) as int;
+                self.len -= 1;
+                Some(ptr::read(self.ptr.offset(offset) as *const T))
+            }
+        }
+    }
 
-  /// Remove the first element from a ring buffer and return it, or `None` if
-  /// it is empty.
-  ///
-  /// # Example
-  ///
-  /// ```rust
-  /// let mut ringbuf = RingBuf::new();
-  /// ringbuf.push_back(1);
-  /// assert_eq!(Some(1), ringbuf.pop_front());
-  /// assert_eq!(None, ringbuf.pop_front());
-  /// ```
-  #[inline]
-  fn pop_front(&mut self) -> Option<T> {
-      if self.len == 0 {
-          None
-      } else {
-          unsafe {
-              let offset = self.get_offset(0) as int;
-              self.lo = self.get_offset(1);
-              self.len -= 1;
-              Some(ptr::read(self.ptr.offset(offset) as *const T))
-          }
-      }
-  }
+    /// Remove the first element from a ring buffer and return it, or `None` if
+    /// it is empty.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// let mut ringbuf = RingBuf::new();
+    /// ringbuf.push_back(1);
+    /// assert_eq!(Some(1), ringbuf.pop_front());
+    /// assert_eq!(None, ringbuf.pop_front());
+    /// ```
+    #[inline]
+    fn pop_front(&mut self) -> Option<T> {
+        if self.len == 0 {
+            None
+        } else {
+            unsafe {
+                let offset = self.get_offset(0) as int;
+                self.lo = self.get_offset(1);
+                self.len -= 1;
+                Some(ptr::read(self.ptr.offset(offset) as *const T))
+            }
+        }
+    }
 }
 
 impl<T:Clone> Clone for RingBuf<T> {
-  fn clone(&self) -> RingBuf<T> {
-      let mut ringbuf = RingBuf::with_capacity(self.len);
-      // Unsafe code so this can be optimised to a memcpy (or something
-      // similarly fast) when T is Copy. LLVM is easily confused, so any
-      // extra operations during the loop can prevent this optimisation
-      {
-          let (slice1, slice2) = self.as_slices();
-          while ringbuf.len < slice1.len() {
-              unsafe {
-                  let len = ringbuf.len;
-                  ptr::write(
-                      ringbuf.ptr.offset(len as int),
-                      slice1.unsafe_ref(len).clone());
-              }
-              ringbuf.len += 1;
-          }
-          while ringbuf.len < slice1.len() + slice2.len() {
-              unsafe {
-                  let len = ringbuf.len;
-                  ptr::write(
-                      ringbuf.ptr.offset(len as int),
-                      slice2.unsafe_ref(len - slice1.len()).clone());
-              }
-              ringbuf.len += 1;
-          }
-      }
-      ringbuf
-  }
+    fn clone(&self) -> RingBuf<T> {
+        let mut ringbuf = RingBuf::with_capacity(self.len);
+        // Unsafe code so this can be optimised to a memcpy (or something
+        // similarly fast) when T is Copy. LLVM is easily confused, so any
+        // extra operations during the loop can prevent this optimisation
+        {
+            let (slice1, slice2) = self.as_slices();
+            while ringbuf.len < slice1.len() {
+                unsafe {
+                    let len = ringbuf.len;
+                    ptr::write(
+                        ringbuf.ptr.offset(len as int),
+                        slice1.unsafe_ref(len).clone());
+                }
+                ringbuf.len += 1;
+            }
+            while ringbuf.len < slice1.len() + slice2.len() {
+                unsafe {
+                    let len = ringbuf.len;
+                    ptr::write(
+                        ringbuf.ptr.offset(len as int),
+                        slice2.unsafe_ref(len - slice1.len()).clone());
+                }
+                ringbuf.len += 1;
+            }
+        }
+        ringbuf
+    }
 
-  fn clone_from(&mut self, source: &RingBuf<T>) {
-      // drop anything in self that will not be overwritten
-      if self.len() > source.len() {
-          self.truncate(source.len())
-      }
+    fn clone_from(&mut self, source: &RingBuf<T>) {
+        // drop anything in self that will not be overwritten
+        if self.len() > source.len() {
+            self.truncate(source.len())
+        }
 
-      // reuse the contained values' allocations/resources.
-      for (place, thing) in self.mut_iter().zip(source.iter()) {
-          place.clone_from(thing)
-      }
+        // reuse the contained values' allocations/resources.
+        for (place, thing) in self.mut_iter().zip(source.iter()) {
+            place.clone_from(thing)
+        }
 
-      // self.len <= source.len due to the truncate above, so the
-      // slice here is always in-bounds.
-      let len = self.len();
-      self.extend(source.iter().skip(len).map(|x| x.clone()));
-  }
+        // self.len <= source.len due to the truncate above, so the
+        // slice here is always in-bounds.
+        let len = self.len();
+        self.extend(source.iter().skip(len).map(|x| x.clone()));
+    }
 }
 
 impl<T> FromIterator<T> for RingBuf<T> {
-  fn from_iter<I:Iterator<T>>(mut iterator: I) -> RingBuf<T> {
-      let (lower, _) = iterator.size_hint();
-      let mut ringbuf = RingBuf::with_capacity(lower);
-      for element in iterator {
-          ringbuf.push_back(element)
-      }
-      ringbuf
-  }
+    fn from_iter<I:Iterator<T>>(mut iterator: I) -> RingBuf<T> {
+        let (lower, _) = iterator.size_hint();
+        let mut ringbuf = RingBuf::with_capacity(lower);
+        for element in iterator {
+            ringbuf.push_back(element)
+        }
+        ringbuf
+    }
 }
 
 impl<T> Extendable<T> for RingBuf<T> {
-  fn extend<I: Iterator<T>>(&mut self, mut iterator: I) {
-      let len = self.len;
-      let (lower, _) = iterator.size_hint();
-      self.reserve_additional(len + lower);
-      for element in iterator {
-          self.push_back(element)
-      }
-  }
+    fn extend<I: Iterator<T>>(&mut self, mut iterator: I) {
+        let len = self.len;
+        let (lower, _) = iterator.size_hint();
+        self.reserve_additional(len + lower);
+        for element in iterator {
+            self.push_back(element)
+        }
+    }
 }
 
 impl<T> Collection for RingBuf<T> {
-  #[inline]
-  fn len(&self) -> uint {
-      self.len
-  }
+    #[inline]
+    fn len(&self) -> uint {
+        self.len
+    }
 }
 
 /// Allocate a buffer with the provided capacity.
 // FIXME: #13996: need a way to mark the return value as `noalias`
 #[inline(never)]
 unsafe fn alloc<T>(capacity: uint) -> *mut T {
-  let size = capacity.checked_mul(&mem::size_of::<T>())
-                     .expect("capacity overflow");
-  allocate(size, mem::min_align_of::<T>()) as *mut T
+    let size = capacity.checked_mul(&mem::size_of::<T>())
+                       .expect("capacity overflow");
+    allocate(size, mem::min_align_of::<T>()) as *mut T
 }
 
 /// Deallocate a buffer of the provided capacity.
 #[inline]
 unsafe fn dealloc<T>(ptr: *mut T, capacity: uint) {
-  if mem::size_of::<T>() != 0 {
-      deallocate(ptr as *mut u8,
-                 capacity * mem::size_of::<T>(),
-                 mem::min_align_of::<T>())
-  }
+    if mem::size_of::<T>() != 0 {
+        deallocate(ptr as *mut u8,
+                   capacity * mem::size_of::<T>(),
+                   mem::min_align_of::<T>())
+    }
 }
 
 impl<T> RingBuf<T> {
-  /// Returns the number of elements the ringbuf can hold without
-  /// reallocating.
-  ///
-  /// # Example
-  ///
-  /// ```rust
-  /// # use std::collections::RingBuf;
-  /// let ringbuf: RingBuf<int> = RingBuf::with_capacity(10);
-  /// assert_eq!(ringbuf.capacity(), 10);
-  /// ```
-  #[inline]
-  pub fn capacity(&self) -> uint {
-      self.cap
-  }
+    /// Returns the number of elements the ringbuf can hold without
+    /// reallocating.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// # use std::collections::RingBuf;
+    /// let ringbuf: RingBuf<int> = RingBuf::with_capacity(10);
+    /// assert_eq!(ringbuf.capacity(), 10);
+    /// ```
+    #[inline]
+    pub fn capacity(&self) -> uint {
+        self.cap
+    }
 
-  /// Reserves capacity for at least `n` additional elements in the given
-  /// ring buffer.
-  ///
-  /// # Failure
-  ///
-  /// Fails if the new capacity overflows `uint`.
-  ///
-  /// # Example
-  ///
-  /// ```rust
-  /// # use collections::RingBuf;
-  /// let mut ringbuf: RingBuf<int> = RingBuf::with_capacity(1);
-  /// ringbuf.reserve_additional(10);
-  /// assert!(ringbuf.capacity() >= 11);
-  /// ```
-  pub fn reserve_additional(&mut self, extra: uint) {
-      if self.cap - self.len < extra {
-          let size = self.len.checked_add(&extra).expect("length overflow");
-          self.reserve(size);
-      }
-  }
+    /// Reserves capacity for at least `n` additional elements in the given
+    /// ring buffer.
+    ///
+    /// # Failure
+    ///
+    /// Fails if the new capacity overflows `uint`.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// # use collections::RingBuf;
+    /// let mut ringbuf: RingBuf<int> = RingBuf::with_capacity(1);
+    /// ringbuf.reserve_additional(10);
+    /// assert!(ringbuf.capacity() >= 11);
+    /// ```
+    pub fn reserve_additional(&mut self, extra: uint) {
+        if self.cap - self.len < extra {
+            let size = self.len.checked_add(&extra).expect("length overflow");
+            self.reserve(size);
+        }
+    }
 
-  /// Reserves capacity for at least `n` elements in the given ring buffer.
-  ///
-  /// This function will over-allocate in order to amortize the allocation
-  /// costs in scenarios where the caller may need to repeatedly reserve
-  /// additional space.
-  ///
-  /// If the capacity for `self` is already equal to or greater than the
-  /// requested capacity, then no action is taken.
-  ///
-  /// # Example
-  ///
-  /// ```rust
-  /// # use collections::RingBuf;
-  /// let mut ringbuf = RingBuf::new();
-  /// ringbuf.reserve(10);
-  /// assert!(ringbuf.capacity() >= 10);
-  /// ```
-  pub fn reserve(&mut self, capacity: uint) {
-      self.reserve_exact(num::next_power_of_two(capacity))
-  }
+    /// Reserves capacity for at least `n` elements in the given ring buffer.
+    ///
+    /// This function will over-allocate in order to amortize the allocation
+    /// costs in scenarios where the caller may need to repeatedly reserve
+    /// additional space.
+    ///
+    /// If the capacity for `self` is already equal to or greater than the
+    /// requested capacity, then no action is taken.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// # use collections::RingBuf;
+    /// let mut ringbuf = RingBuf::new();
+    /// ringbuf.reserve(10);
+    /// assert!(ringbuf.capacity() >= 10);
+    /// ```
+    pub fn reserve(&mut self, capacity: uint) {
+        self.reserve_exact(num::next_power_of_two(capacity))
+    }
 
-  /// Reserves capacity for exactly `capacity` elements in the given ring
-  /// buffer.
-  ///
-  /// If the capacity for `self` is already equal to or greater than the
-  /// requested capacity, then no action is taken.
-  ///
-  /// # Example
-  ///
-  /// ```rust
-  /// # use collections::RingBuf;
-  /// let mut ringbuf: RingBuf<int> = RingBuf::with_capacity(10);
-  /// ringbuf.reserve_exact(11);
-  /// assert_eq!(ringbuf.capacity(), 11);
-  /// ```
-  pub fn reserve_exact(&mut self, capacity: uint) {
-      if capacity > self.cap {
-          self.resize(capacity);
-      }
-  }
+    /// Reserves capacity for exactly `capacity` elements in the given ring
+    /// buffer.
+    ///
+    /// If the capacity for `self` is already equal to or greater than the
+    /// requested capacity, then no action is taken.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// # use collections::RingBuf;
+    /// let mut ringbuf: RingBuf<int> = RingBuf::with_capacity(10);
+    /// ringbuf.reserve_exact(11);
+    /// assert_eq!(ringbuf.capacity(), 11);
+    /// ```
+    pub fn reserve_exact(&mut self, capacity: uint) {
+        if capacity > self.cap {
+            self.resize(capacity);
+        }
+    }
 
-  /// Shrink the capacity of the ring buffer as much as possible
-  ///
-  /// # Example
-  ///
-  /// ```rust
-  /// # use collections::RingBuf;
-  /// let mut ringbuf = RingBuf::new();
-  /// ringbuf.push_back(1);
-  /// ringbuf.shrink_to_fit();
-  /// ```
-  pub fn shrink_to_fit(&mut self) {
-      let len = self.len;
-      self.resize(len);
-  }
+    /// Shrink the capacity of the ring buffer as much as possible
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// # use collections::RingBuf;
+    /// let mut ringbuf = RingBuf::new();
+    /// ringbuf.push_back(1);
+    /// ringbuf.shrink_to_fit();
+    /// ```
+    pub fn shrink_to_fit(&mut self) {
+        let len = self.len;
+        self.resize(len);
+    }
 }
 
 impl<T> RingBuf<T> {
-  /// Resize the `RingBuf` to the specified capacity.
-  ///
-  /// # Failure
-  ///
-  /// Fails if the number of elements in the ring buffer is greater than
-  /// the requested capacity.
-  fn resize(&mut self, capacity: uint) {
-      assert!(capacity >= self.len, "capacity underflow");
+    /// Resize the `RingBuf` to the specified capacity.
+    ///
+    /// # Failure
+    ///
+    /// Fails if the number of elements in the ring buffer is greater than
+    /// the requested capacity.
+    fn resize(&mut self, capacity: uint) {
+        assert!(capacity >= self.len, "capacity underflow");
 
-      if capacity == self.cap { return }
-      if mem::size_of::<T>() == 0 { return }
+        if capacity == self.cap { return }
+        if mem::size_of::<T>() == 0 { return }
 
-      let ptr;
-      unsafe {
-          if capacity == 0 {
-              ptr = 0 as *mut T;
-          } else {
-              let (slice1, slice2) = self.as_slices();
-              ptr = alloc::<T>(capacity) as *mut T;
-              let len1 = slice1.len();
-              ptr::copy_nonoverlapping_memory(ptr, slice1.as_ptr(), len1);
-              ptr::copy_nonoverlapping_memory(ptr.offset(len1 as int),
-                                              slice2.as_ptr(),
-                                              slice2.len());
-          }
-          if self.cap != 0 {
-              dealloc(self.ptr, self.cap);
-          }
-      }
+        let ptr;
+        unsafe {
+            if capacity == 0 {
+                ptr = 0 as *mut T;
+            } else {
+                let (slice1, slice2) = self.as_slices();
+                ptr = alloc::<T>(capacity) as *mut T;
+                let len1 = slice1.len();
+                ptr::copy_nonoverlapping_memory(ptr, slice1.as_ptr(), len1);
+                ptr::copy_nonoverlapping_memory(ptr.offset(len1 as int),
+                slice2.as_ptr(),
+                slice2.len());
+            }
+            if self.cap != 0 {
+                dealloc(self.ptr, self.cap);
+            }
+        }
 
-      self.ptr = ptr;
-      self.cap = capacity;
-      self.lo = 0;
-  }
+        self.ptr = ptr;
+        self.cap = capacity;
+        self.lo = 0;
+    }
 
-  /// Return the offset of the next back slot
-  #[inline]
-  fn get_back_offset(&self) -> uint {
-      self.get_offset(self.len)
-  }
+    /// Return the offset of the next back slot
+    #[inline]
+    fn get_back_offset(&self) -> uint {
+        self.get_offset(self.len)
+    }
 
-  /// Return the offset of the next front slot
-  #[inline]
-  fn get_front_offset(&self) -> uint {
-      if self.lo == 0 {
-          self.cap - 1
-      } else {
-          self.lo - 1
-      }
-  }
+    /// Return the offset of the next front slot
+    #[inline]
+    fn get_front_offset(&self) -> uint {
+        if self.lo == 0 {
+            self.cap - 1
+        } else {
+            self.lo - 1
+        }
+    }
 
-  /// Return the offset of the given index in the underlying buffer.
-  #[inline]
-  fn get_offset(&self, index: uint) -> uint {
-      // The order of these operations preserves numerical stability
-      if self.lo >= self.cap - index {
-          index - (self.cap - self.lo)
-      } else {
-          self.lo + index
-      }
-  }
+    /// Return the offset of the given index in the underlying buffer.
+    #[inline]
+    fn get_offset(&self, index: uint) -> uint {
+        // The order of these operations preserves numerical stability
+        if self.lo >= self.cap - index {
+            index - (self.cap - self.lo)
+        } else {
+            self.lo + index
+        }
+    }
 
-  /// Reset the `lo` index to 0. This may require copying and temporary
-  /// allocation.
-  fn reset(&mut self) {
-      if self.lo == 0 { return }
+    /// Reset the `lo` index to 0. This may require copying and temporary
+    /// allocation.
+    fn reset(&mut self) {
+        if self.lo == 0 { return }
 
-      // Shift elements to start of buffer
-      {
-          // `slice1` begins at the `lo` index.
-          // `slice2` begins at the `0` index.
-          let (slice1, slice2) = self.as_slices();
-          let len1 = slice1.len();
-          let len2 = slice2.len();
+        // Shift elements to start of buffer
+        {
+            // `slice1` begins at the `lo` index.
+            // `slice2` begins at the `0` index.
+            let (slice1, slice2) = self.as_slices();
+            let len1 = slice1.len();
+            let len2 = slice2.len();
 
-          if len1 == 0 {
-              // Nothing to do
-          } if len2 == 0 {
-              // The buffer does not wrap. Move slice1.
-              //
-              //   lo
-              //    V
-              // +-+-+-+-+-+-+-+
-              // | |x|x|x|x|x| |
-              // +-+-+-+-+-+-+-+
-              unsafe {
-                  ptr::copy_memory(self.ptr,
-                                   self.ptr.offset(self.lo as int) as *const T,
-                                   self.len);
-              }
+            if len1 == 0 {
+                // Nothing to do
+            } if len2 == 0 {
+                // The buffer does not wrap. Move slice1.
+                //
+                //   lo
+                //    V
+                // +-+-+-+-+-+-+-+
+                // | |x|x|x|x|x| |
+                // +-+-+-+-+-+-+-+
+                unsafe {
+                    ptr::copy_memory(self.ptr,
+                                     self.ptr.offset(self.lo as int) as *const T,
+                                     self.len);
+                }
 
-          } if len1 <= (self.cap - len1) - len2 {
-              // There is sufficient space to move slice2 without overwriting
-              // slice1.
-              //
-              //           lo
-              //            V
-              // +-+-+-+-+-+-+-+
-              // |x|x|x| | |x|x|
-              // +-+-+-+-+-+-+-+
-              unsafe {
-                  ptr::copy_memory(self.ptr.offset(slice1.len() as int),
-                                   slice2.as_ptr(),
-                                   slice2.len());
-                  ptr::copy_memory(self.ptr,
-                                   slice1.as_ptr(),
-                                   slice1.len());
-              }
-          } else if len1 < len2 {
-              // Copy slice1 and move slice2.
-              //
-              //           lo
-              //            V
-              // +-+-+-+-+-+-+-+
-              // |x|x|x|x| |x|x|
-              // +-+-+-+-+-+-+-+
-              unsafe {
-                  let tmp = alloc(len1);
-                  ptr::copy_nonoverlapping_memory(tmp,
-                                                  slice1.as_ptr(),
-                                                  len1);
-                  ptr::copy_memory(self.ptr.offset(len1 as int),
-                                   slice2.as_ptr(),
-                                   len2);
-                  ptr::copy_nonoverlapping_memory(self.ptr,
-                                                  tmp as *const T,
-                                                  len1);
-                  dealloc(tmp, len1);
-              }
-          } else {
-              // Copy slice2 and move slice1.
-              //
-              //         lo
-              //          V
-              // +-+-+-+-+-+-+-+
-              // |x|x| | |x|x|x|
-              // +-+-+-+-+-+-+-+
-              unsafe {
-                  let tmp = alloc(len2);
-                  ptr::copy_nonoverlapping_memory(tmp,
-                                                  slice2.as_ptr(),
-                                                  len2);
-                  ptr::copy_memory(self.ptr,
-                                   slice1.as_ptr(),
-                                   len1);
-                  ptr::copy_nonoverlapping_memory(self.ptr.offset(len1 as int),
-                                                  tmp as *const T,
-                                                  len2);
-                  dealloc(tmp, len2);
-              }
-          }
-      }
-      self.lo = 0;
-  }
+            } if len1 <= (self.cap - len1) - len2 {
+                // There is sufficient space to move slice2 without overwriting
+                // slice1.
+                //
+                //           lo
+                //            V
+                // +-+-+-+-+-+-+-+
+                // |x|x|x| | |x|x|
+                // +-+-+-+-+-+-+-+
+                unsafe {
+                    ptr::copy_memory(self.ptr.offset(slice1.len() as int),
+                                     slice2.as_ptr(),
+                                     slice2.len());
+                    ptr::copy_memory(self.ptr,
+                                     slice1.as_ptr(),
+                                     slice1.len());
+                }
+            } else if len1 < len2 {
+                // Copy slice1 and move slice2.
+                //
+                //           lo
+                //            V
+                // +-+-+-+-+-+-+-+
+                // |x|x|x|x| |x|x|
+                // +-+-+-+-+-+-+-+
+                unsafe {
+                    let tmp = alloc(len1);
+                    ptr::copy_nonoverlapping_memory(tmp,
+                                                    slice1.as_ptr(),
+                                                    len1);
+                    ptr::copy_memory(self.ptr.offset(len1 as int),
+                                     slice2.as_ptr(),
+                                     len2);
+                    ptr::copy_nonoverlapping_memory(self.ptr,
+                                                    tmp as *const T,
+                                                    len1);
+                    dealloc(tmp, len1);
+                }
+            } else {
+                // Copy slice2 and move slice1.
+                //
+                //         lo
+                //          V
+                // +-+-+-+-+-+-+-+
+                // |x|x| | |x|x|x|
+                // +-+-+-+-+-+-+-+
+                unsafe {
+                    let tmp = alloc(len2);
+                    ptr::copy_nonoverlapping_memory(tmp,
+                                                    slice2.as_ptr(),
+                                                    len2);
+                    ptr::copy_memory(self.ptr,
+                                     slice1.as_ptr(),
+                                     len1);
+                    ptr::copy_nonoverlapping_memory(self.ptr.offset(len1 as int),
+                    tmp as *const T,
+                    len2);
+                    dealloc(tmp, len2);
+                }
+            }
+        }
+        self.lo = 0;
+    }
 }
 
 impl<T: PartialEq> PartialEq for RingBuf<T> {
-  #[inline]
-  fn eq(&self, other: &RingBuf<T>) -> bool {
-      self.len == other.len
-          && self.iter().zip(other.iter()).all(|(a, b)| a == b)
-  }
+    #[inline]
+    fn eq(&self, other: &RingBuf<T>) -> bool {
+        self.len == other.len
+            && self.iter().zip(other.iter()).all(|(a, b)| a == b)
+    }
 }
 
 impl<T: PartialOrd> PartialOrd for RingBuf<T> {
-  #[inline]
-  fn lt(&self, other: &RingBuf<T>) -> bool {
-      self.iter().zip(other.iter()).all(|(a, b)| a.lt(b))
-          && self.len < other.len
-  }
+    #[inline]
+    fn lt(&self, other: &RingBuf<T>) -> bool {
+        self.iter().zip(other.iter()).all(|(a, b)| a.lt(b))
+            && self.len < other.len
+    }
 }
 
 impl<T: Eq> Eq for RingBuf<T> {}
 
 impl<T: Ord> Ord for RingBuf<T> {
-  #[inline]
-  fn cmp(&self, other: &RingBuf<T>) -> Ordering {
-      for (a, b) in self.iter().zip(other.iter()) {
-          let cmp = a.cmp(b);
-          if cmp != Equal {
-              return cmp;
-          }
-      }
-      self.len.cmp(&other.len)
-  }
+    #[inline]
+    fn cmp(&self, other: &RingBuf<T>) -> Ordering {
+        for (a, b) in self.iter().zip(other.iter()) {
+            let cmp = a.cmp(b);
+            if cmp != Equal {
+                return cmp;
+            }
+        }
+        self.len.cmp(&other.len)
+    }
 }
 
 impl<T: fmt::Show> fmt::Show for RingBuf<T> {
-  fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-      try!(write!(f, "["));
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        try!(write!(f, "["));
 
-      for (i, e) in self.iter().enumerate() {
-          if i != 0 { try!(write!(f, ", ")); }
-          try!(write!(f, "{}", *e));
-      }
+        for (i, e) in self.iter().enumerate() {
+            if i != 0 { try!(write!(f, ", ")); }
+            try!(write!(f, "{}", *e));
+        }
 
-      write!(f, "]")
-  }
+        write!(f, "]")
+    }
 }
 
 #[unsafe_destructor]
 impl<T> Drop for RingBuf<T> {
-  fn drop(&mut self) {
-      if self.cap != 0 {
-          unsafe {
-              for x in self.iter() {
-                  ptr::read(x);
-              }
+    fn drop(&mut self) {
+        if self.cap != 0 {
+            unsafe {
+                for x in self.iter() {
+                    ptr::read(x);
+                }
 
-              dealloc(self.ptr, self.cap)
-          }
-      }
-  }
+                dealloc(self.ptr, self.cap)
+            }
+        }
+    }
 }
 
 /// An iterator that moves out of a RingBuf.
@@ -962,195 +962,188 @@ impl<T> Drop for MoveItems<T> {
 
 #[cfg(test)]
 mod checks {
-  use std::collections::Deque;
-  use std::iter::FromIterator;
-  use std::rand::Rand;
+    use std::collections::Deque;
+    use std::iter::FromIterator;
+    use std::rand::Rand;
 
-  use quickcheck::Arbitrary;
-  use quickcheck::Gen;
-  use quickcheck::Shrinker;
-  use quickcheck::quickcheck;
+    use quickcheck::Arbitrary;
+    use quickcheck::Gen;
+    use quickcheck::Shrinker;
+    use quickcheck::quickcheck;
 
-  use super::RingBuf;
+    use super::RingBuf;
 
-  /// Creates a new ringbuf with a provided initial capacity and offset, and
-  /// copied elements from the provided slice. This is a convenience for
-  /// creating a ringbuf with a `lo` offset other than the default buffer start.
-  fn create_ringbuf_with_offset<T: Copy>(items: &[T],
-                                         capacity: uint,
-                                         lo: uint)
-                                         -> RingBuf<T> {
-        let mut ringbuf = RingBuf::with_capacity(capacity);
-        ringbuf.lo = if capacity == 0 { 0 } else { lo % capacity };
-        for &i in items.iter() {
-            ringbuf.push_back(i);
+    /// Creates a new ringbuf with a provided initial capacity and offset, and
+    /// copied elements from the provided slice. This is a convenience for
+    /// creating a ringbuf with a `lo` offset other than the default buffer start.
+    fn create_ringbuf_with_offset<T: Copy>(items: &[T],
+                                           capacity: uint,
+                                           lo: uint)
+                                           -> RingBuf<T> {
+            let mut ringbuf = RingBuf::with_capacity(capacity);
+            ringbuf.lo = if capacity == 0 { 0 } else { lo % capacity };
+            for &i in items.iter() {
+                ringbuf.push_back(i);
+            }
+            ringbuf
         }
-        ringbuf
-  }
 
-  impl<A: Copy + Arbitrary> Arbitrary for RingBuf<A> {
-      fn arbitrary<G: Gen>(g: &mut G) -> RingBuf<A> {
-          let vec: Vec<A> = Arbitrary::arbitrary(g);
-          let cap = vec.capacity();
-          let lo = if cap == 0 { 0 } else { g.gen_range(0, cap) };
+    impl<A: Copy + Arbitrary> Arbitrary for RingBuf<A> {
+        fn arbitrary<G: Gen>(g: &mut G) -> RingBuf<A> {
+            let vec: Vec<A> = Arbitrary::arbitrary(g);
+            let cap = vec.capacity();
+            let lo = if cap == 0 { 0 } else { g.gen_range(0, cap) };
 
-          create_ringbuf_with_offset(vec.as_slice(), cap, lo)
-      }
+            create_ringbuf_with_offset(vec.as_slice(), cap, lo)
+        }
 
-      fn shrink(&self) -> Box<Shrinker<RingBuf<A>>> {
-          let mut xs: Vec<RingBuf<A>> = vec!();
+        fn shrink(&self) -> Box<Shrinker<RingBuf<A>>> {
+            let mut xs: Vec<RingBuf<A>> = vec!();
 
-          // Add versions with varying offsets
-          let mut lo = self.lo;
-          while lo > 0 {
-              let shrinks = self.clone()
-                                .into_vec()
-                                .shrink()
-                                .map(|x| create_ringbuf_with_offset(x.as_slice(),
-                                                                    self.cap,
-                                                                    lo))
-                                .collect();
-              xs.push_all_move(shrinks);
-              lo = lo / 2;
-          }
+            // Add versions with varying offsets
+            let mut lo = self.lo;
+            while lo > 0 {
+                let shrinks = self.clone()
+                                  .into_vec()
+                                  .shrink()
+                                  .map(|x| create_ringbuf_with_offset(x.as_slice(),
+                                                                      self.cap,
+                                                                      lo))
+                                  .collect();
+                xs.push_all_move(shrinks);
+                lo = lo / 2;
+            }
 
-          // Add version with 0 offset
-          let shrinks = self.clone()
-                            .into_vec()
-                            .shrink()
-                            .map(|x| RingBuf::from_vec(x))
-                            .collect();
-          xs.push_all_move(shrinks);
-          box xs.move_iter() as Box<Shrinker<RingBuf<A>>>
-      }
-  }
+            // Add version with 0 offset
+            let shrinks = self.clone()
+                              .into_vec()
+                              .shrink()
+                              .map(|x| RingBuf::from_vec(x))
+                              .collect();
+            xs.push_all_move(shrinks);
+            box xs.move_iter() as Box<Shrinker<RingBuf<A>>>
+        }
+    }
 
-  #[test]
-  fn check_vec_bijection() {
-      fn prop(rb: RingBuf<int>) -> bool {
-          rb == RingBuf::from_vec(rb.clone().into_vec())
-      }
+    #[test]
+    fn check_vec_bijection() {
+        fn prop(rb: RingBuf<int>) -> bool {
+            rb == RingBuf::from_vec(rb.clone().into_vec())
+        }
 
-      quickcheck(prop);
-  }
+        quickcheck(prop);
+    }
 
-  #[test]
-  fn check_iter_bijection() {
-      fn prop(rb: RingBuf<int>) -> bool {
-          rb == FromIterator::from_iter(rb.clone().move_iter())
-      }
+    #[test]
+    fn check_iter_bijection() {
+        fn prop(rb: RingBuf<int>) -> bool {
+            rb == FromIterator::from_iter(rb.clone().move_iter())
+        }
 
-      quickcheck(prop);
-  }
+        quickcheck(prop);
+    }
 
-  #[test]
-  fn check_clone_equivalence() {
-      fn prop(rb: RingBuf<int>) -> bool {
-          rb == rb.clone()
-      }
+    #[test]
+    fn check_clone_equivalence() {
+        fn prop(rb: RingBuf<int>) -> bool {
+            rb == rb.clone()
+        }
 
-      quickcheck(prop);
-  }
+        quickcheck(prop);
+    }
 
-  #[test]
-  fn test_shrink_to_fit_equivalence() {
-      fn prop(rb: RingBuf<int>) -> bool {
-          let mut stf = rb.clone();
-          stf.shrink_to_fit();
-          rb == stf
-      }
+    #[test]
+    fn test_shrink_to_fit_equivalence() {
+        fn prop(rb: RingBuf<int>) -> bool {
+            let mut stf = rb.clone();
+            stf.shrink_to_fit();
+            rb == stf
+        }
 
-      quickcheck(prop);
-  }
+        quickcheck(prop);
+    }
 
-  #[test]
-  fn check_back_push_pop_get() {
-      fn prop(rb: RingBuf<int>, item: int) -> bool {
-          let mut copy = rb.clone();
-          copy.push_back(item);
+    #[test]
+    fn check_back_push_pop_get() {
+        fn prop(rb: RingBuf<int>, item: int) -> bool {
+            let mut copy = rb.clone();
+            copy.push_back(item);
 
-          copy.back() == Some(&item)
-              && copy.pop_back() == Some(item)
-              && copy == rb
+            copy.back() == Some(&item)
+                && copy.pop_back() == Some(item)
+                && copy == rb
+        }
+        quickcheck(prop);
+    }
 
-      }
+    #[test]
+    fn check_front_push_pop_get() {
+        fn prop(rb: RingBuf<int>, item: int) -> bool {
+            let mut copy = rb.clone();
+            copy.push_front(item);
 
-      quickcheck(prop);
-  }
+            copy.front() == Some(&item)
+                && copy.pop_front() == Some(item)
+                && copy == rb
+        }
+        quickcheck(prop);
+    }
 
-  #[test]
-  fn check_front_push_pop_get() {
-      fn prop(rb: RingBuf<int>, item: int) -> bool {
-          let mut copy = rb.clone();
-          copy.push_front(item);
+    #[test]
+    fn check_get() {
+        fn prop(rb: RingBuf<int>) -> bool {
+            let vec = rb.clone().into_vec();
+            rb.len() == vec.len()
+                && rb.iter().zip(vec.iter()).all(|(a, b)| a == b)
+        }
+        quickcheck(prop);
+    }
 
-          copy.front() == Some(&item)
-              && copy.pop_front() == Some(item)
-              && copy == rb
+    #[test]
+    fn check_cmp() {
+        fn prop(rb1: RingBuf<int>, rb2: RingBuf<int>) -> bool {
+            let vec1 = rb1.clone().into_vec();
+            let vec2 = rb2.clone().into_vec();
 
-      }
+            rb1.cmp(&rb2) == vec1.cmp(&vec2)
+        }
+        quickcheck(prop);
+    }
 
-      quickcheck(prop);
-  }
+    #[test]
+    fn check_extendable() {
+        fn prop(vec: Vec<int>) -> bool {
+            let mut rb = RingBuf::new();
+            rb.extend(vec.clone().move_iter());
+            vec == rb.into_vec()
+        }
+        quickcheck(prop);
+    }
 
-  #[test]
-  fn check_get() {
-      fn prop(rb: RingBuf<int>) -> bool {
-          let vec = rb.clone().into_vec();
-          rb.len() == vec.len()
-              && rb.iter().zip(vec.iter()).all(|(a, b)| a == b)
-      }
+    #[test]
+    fn check_iter() {
+        fn prop(rb: RingBuf<int>) -> bool {
+            rb.clone().iter().zip(rb.into_vec().iter()).all(|(a, b)| a == b)
+        }
 
-      quickcheck(prop);
-  }
+        quickcheck(prop);
+    }
 
-  #[test]
-  fn check_cmp() {
-      fn prop(rb1: RingBuf<int>, rb2: RingBuf<int>) -> bool {
-          let vec1 = rb1.clone().into_vec();
-          let vec2 = rb2.clone().into_vec();
+    #[test]
+    fn check_mut_iter() {
+        fn prop(rb: RingBuf<int>) -> bool {
+            rb.clone().mut_iter().zip(rb.into_vec().mut_iter()).all(|(a, b)| a == b)
+        }
 
-          rb1.cmp(&rb2) == vec1.cmp(&vec2)
-      }
+        quickcheck(prop);
+    }
 
-      quickcheck(prop);
-  }
+    #[test]
+    fn check_move_iter() {
+        fn prop(rb: RingBuf<int>) -> bool {
+            rb.clone().move_iter().zip(rb.into_vec().move_iter()).all(|(a, b)| a == b)
+        }
 
-  #[test]
-  fn check_extendable() {
-      fn prop(vec: Vec<int>) -> bool {
-          let mut rb = RingBuf::new();
-          rb.extend(vec.clone().move_iter());
-          vec == rb.into_vec()
-      }
-
-      quickcheck(prop);
-  }
-
-  #[test]
-  fn check_iter() {
-      fn prop(rb: RingBuf<int>) -> bool {
-          rb.clone().iter().zip(rb.into_vec().iter()).all(|(a, b)| a == b)
-      }
-
-      quickcheck(prop);
-  }
-
-  #[test]
-  fn check_mut_iter() {
-      fn prop(rb: RingBuf<int>) -> bool {
-          rb.clone().mut_iter().zip(rb.into_vec().mut_iter()).all(|(a, b)| a == b)
-      }
-
-      quickcheck(prop);
-  }
-
-  #[test]
-  fn check_move_iter() {
-      fn prop(rb: RingBuf<int>) -> bool {
-          rb.clone().move_iter().zip(rb.into_vec().move_iter()).all(|(a, b)| a == b)
-      }
-
-      quickcheck(prop);
-  }
+        quickcheck(prop);
+    }
 }
