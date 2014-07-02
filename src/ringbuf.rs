@@ -15,6 +15,7 @@ extern crate quickcheck;
 
 use std::cmp;
 use std::collections::Deque;
+use std::default::Default;
 use std::fmt;
 use std::iter::Chain;
 use std::iter::FromIterator;
@@ -31,8 +32,6 @@ use std::uint;
 /// # Examples
 ///
 /// ```rust
-/// use collections::RingBuf;
-/// use collections::Deque;
 /// let mut ringbuf = RingBuf::new();
 /// ringbuf.push_front(1);
 /// ringbuf.push_back(2);
@@ -78,9 +77,6 @@ impl<T> RingBuf<T> {
     /// # Example
     ///
     /// ```rust
-    /// # use collections::RingBuf;
-    /// # use collections::Deque;
-    ///
     /// let mut ringbuf: RingBuf<int> = RingBuf::new();
     /// ```
     pub fn new() -> RingBuf<T> {
@@ -95,7 +91,6 @@ impl<T> RingBuf<T> {
     /// # Example
     ///
     /// ```rust
-    /// # use collections::ringbuf::RingBuf;
     /// let ring: RingBuf<int> = RingBuf::with_capacity(10);
     /// ```
     pub fn with_capacity(capacity: uint) -> RingBuf<T> {
@@ -119,7 +114,6 @@ impl<T> RingBuf<T> {
     /// # Example
     ///
     /// ```rust
-    /// #use collections.ringbuf.RingBuf;
     /// let mut vec = vec!(1, 2, 3);
     /// let ringbuf = RingBuf::from_vec(vec);
     /// ```
@@ -139,7 +133,6 @@ impl<T> RingBuf<T> {
     /// # Example
     ///
     /// ```rust
-    /// #use collections.ringbuf.RingBuf;
     /// let mut ringbuf = RingBuf::new();
     /// ringbuf.push_front(1);
     /// ringbuf.push_back(2);
@@ -245,7 +238,7 @@ impl<T> RingBuf<T> {
     /// ```
     #[inline]
     pub fn as_slices<'a>(&'a self) -> (&'a [T], &'a [T]) {
-        let (ptr1, len1, ptr2, len2) = get_slice_ptrs(self);
+        let (ptr1, len1, ptr2, len2) = self.get_slice_ptrs();
         unsafe {
             (mem::transmute(Slice { data: ptr1, len: len1 }),
              mem::transmute(Slice { data: ptr2, len: len2 }))
@@ -266,7 +259,7 @@ impl<T> RingBuf<T> {
     /// ```
     #[inline]
     pub fn as_mut_slices<'a>(&'a mut self) -> (&'a mut [T], &'a mut [T]) {
-        let (ptr1, len1, ptr2, len2) = get_slice_ptrs(self);
+        let (ptr1, len1, ptr2, len2) = self.get_slice_ptrs();
         unsafe {
             (mem::transmute(Slice { data: ptr1, len: len1 }),
              mem::transmute(Slice { data: ptr2, len: len2 }))
@@ -334,29 +327,100 @@ impl<T> RingBuf<T> {
         }
     }
 
-}
+    /// Returns the number of elements the ringbuf can hold without
+    /// reallocating.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// let ringbuf: RingBuf<int> = RingBuf::with_capacity(10);
+    /// assert_eq!(ringbuf.capacity(), 10);
+    /// ```
+    #[inline]
+    pub fn capacity(&self) -> uint {
+        self.cap
+    }
 
-/// Calculates the start and length of the slices into this ringbuf.
-#[inline]
-fn get_slice_ptrs<T>(ringbuf: &RingBuf<T>) -> (*const T, uint, *const T, uint) {
-    let ptr1;
-    let ptr2;
-    let len1;
-    let len2;
-    unsafe {
-        if ringbuf.lo > ringbuf.cap - ringbuf.len {
-            ptr1 = ringbuf.ptr.offset(ringbuf.lo as int);
-            ptr2 = ringbuf.ptr;
-            len1 = ringbuf.cap - ringbuf.lo;
-            len2 = ringbuf.len - len1;
-        } else {
-            ptr1 = ringbuf.ptr.offset(ringbuf.lo as int);
-            ptr2 = ringbuf.ptr;
-            len1 = ringbuf.len;
-            len2 = 0;
+    /// Reserves capacity for at least `n` additional elements in the given
+    /// ring buffer.
+    ///
+    /// # Failure
+    ///
+    /// Fails if the new capacity overflows `uint`.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// let mut ringbuf: RingBuf<int> = RingBuf::with_capacity(1);
+    /// ringbuf.reserve_additional(10);
+    /// assert!(ringbuf.capacity() >= 11);
+    /// ```
+    pub fn reserve_additional(&mut self, extra: uint) {
+        if self.cap - self.len < extra {
+            let size = self.len.checked_add(&extra).expect("length overflow");
+            self.reserve(size);
         }
     }
-    (ptr1 as *const T, len1, ptr2 as *const T, len2)
+
+    /// Reserves capacity for at least `n` elements in the given ring buffer.
+    ///
+    /// This function will over-allocate in order to amortize the allocation
+    /// costs in scenarios where the caller may need to repeatedly reserve
+    /// additional space.
+    ///
+    /// If the capacity for `self` is already equal to or greater than the
+    /// requested capacity, then no action is taken.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// let mut ringbuf = RingBuf::new();
+    /// ringbuf.reserve(10);
+    /// assert!(ringbuf.capacity() >= 10);
+    /// ```
+    pub fn reserve(&mut self, capacity: uint) {
+        self.reserve_exact(num::next_power_of_two(capacity))
+    }
+
+    /// Reserves capacity for exactly `capacity` elements in the given ring
+    /// buffer.
+    ///
+    /// If the capacity for `self` is already equal to or greater than the
+    /// requested capacity, then no action is taken.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// let mut ringbuf: RingBuf<int> = RingBuf::with_capacity(10);
+    /// ringbuf.reserve_exact(11);
+    /// assert_eq!(ringbuf.capacity(), 11);
+    /// ```
+    pub fn reserve_exact(&mut self, capacity: uint) {
+        if capacity > self.cap {
+            self.resize(capacity);
+        }
+    }
+
+    /// Shrink the capacity of the ring buffer as much as possible
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// let mut ringbuf = RingBuf::new();
+    /// ringbuf.push_back(1);
+    /// ringbuf.shrink_to_fit();
+    /// ```
+    pub fn shrink_to_fit(&mut self) {
+        let len = self.len;
+        self.resize(len);
+    }
+}
+
+impl<T> Collection for RingBuf<T> {
+    #[inline]
+    fn len(&self) -> uint {
+        self.len
+    }
 }
 
 impl<T> Mutable for RingBuf<T> {
@@ -510,6 +574,11 @@ impl<T> Deque<T> for RingBuf<T> {
     }
 }
 
+impl<T> Default for RingBuf<T> {
+    #[inline]
+    fn default() -> RingBuf<T> { RingBuf::new() }
+}
+
 impl<T:Clone> Clone for RingBuf<T> {
     fn clone(&self) -> RingBuf<T> {
         let mut ringbuf = RingBuf::with_capacity(self.len);
@@ -580,13 +649,6 @@ impl<T> Extendable<T> for RingBuf<T> {
     }
 }
 
-impl<T> Collection for RingBuf<T> {
-    #[inline]
-    fn len(&self) -> uint {
-        self.len
-    }
-}
-
 /// Allocate a buffer with the provided capacity.
 // FIXME: #13996: need a way to mark the return value as `noalias`
 #[inline(never)]
@@ -607,101 +669,30 @@ unsafe fn dealloc<T>(ptr: *mut T, capacity: uint) {
 }
 
 impl<T> RingBuf<T> {
-    /// Returns the number of elements the ringbuf can hold without
-    /// reallocating.
-    ///
-    /// # Example
-    ///
-    /// ```rust
-    /// # use std::collections::RingBuf;
-    /// let ringbuf: RingBuf<int> = RingBuf::with_capacity(10);
-    /// assert_eq!(ringbuf.capacity(), 10);
-    /// ```
+
+    /// Calculates the start and length of the slices in this ringbuf.
     #[inline]
-    pub fn capacity(&self) -> uint {
-        self.cap
-    }
-
-    /// Reserves capacity for at least `n` additional elements in the given
-    /// ring buffer.
-    ///
-    /// # Failure
-    ///
-    /// Fails if the new capacity overflows `uint`.
-    ///
-    /// # Example
-    ///
-    /// ```rust
-    /// # use collections::RingBuf;
-    /// let mut ringbuf: RingBuf<int> = RingBuf::with_capacity(1);
-    /// ringbuf.reserve_additional(10);
-    /// assert!(ringbuf.capacity() >= 11);
-    /// ```
-    pub fn reserve_additional(&mut self, extra: uint) {
-        if self.cap - self.len < extra {
-            let size = self.len.checked_add(&extra).expect("length overflow");
-            self.reserve(size);
+    fn get_slice_ptrs(&self) -> (*const T, uint, *const T, uint) {
+        let ptr1;
+        let ptr2;
+        let len1;
+        let len2;
+        unsafe {
+            if self.lo > self.cap - self.len {
+                ptr1 = self.ptr.offset(self.lo as int);
+                ptr2 = self.ptr;
+                len1 = self.cap - self.lo;
+                len2 = self.len - len1;
+            } else {
+                ptr1 = self.ptr.offset(self.lo as int);
+                ptr2 = self.ptr;
+                len1 = self.len;
+                len2 = 0;
+            }
         }
+        (ptr1 as *const T, len1, ptr2 as *const T, len2)
     }
 
-    /// Reserves capacity for at least `n` elements in the given ring buffer.
-    ///
-    /// This function will over-allocate in order to amortize the allocation
-    /// costs in scenarios where the caller may need to repeatedly reserve
-    /// additional space.
-    ///
-    /// If the capacity for `self` is already equal to or greater than the
-    /// requested capacity, then no action is taken.
-    ///
-    /// # Example
-    ///
-    /// ```rust
-    /// # use collections::RingBuf;
-    /// let mut ringbuf = RingBuf::new();
-    /// ringbuf.reserve(10);
-    /// assert!(ringbuf.capacity() >= 10);
-    /// ```
-    pub fn reserve(&mut self, capacity: uint) {
-        self.reserve_exact(num::next_power_of_two(capacity))
-    }
-
-    /// Reserves capacity for exactly `capacity` elements in the given ring
-    /// buffer.
-    ///
-    /// If the capacity for `self` is already equal to or greater than the
-    /// requested capacity, then no action is taken.
-    ///
-    /// # Example
-    ///
-    /// ```rust
-    /// # use collections::RingBuf;
-    /// let mut ringbuf: RingBuf<int> = RingBuf::with_capacity(10);
-    /// ringbuf.reserve_exact(11);
-    /// assert_eq!(ringbuf.capacity(), 11);
-    /// ```
-    pub fn reserve_exact(&mut self, capacity: uint) {
-        if capacity > self.cap {
-            self.resize(capacity);
-        }
-    }
-
-    /// Shrink the capacity of the ring buffer as much as possible
-    ///
-    /// # Example
-    ///
-    /// ```rust
-    /// # use collections::RingBuf;
-    /// let mut ringbuf = RingBuf::new();
-    /// ringbuf.push_back(1);
-    /// ringbuf.shrink_to_fit();
-    /// ```
-    pub fn shrink_to_fit(&mut self) {
-        let len = self.len;
-        self.resize(len);
-    }
-}
-
-impl<T> RingBuf<T> {
     /// Resize the `RingBuf` to the specified capacity.
     ///
     /// # Failure
@@ -868,9 +859,13 @@ impl<T: PartialEq> PartialEq for RingBuf<T> {
 
 impl<T: PartialOrd> PartialOrd for RingBuf<T> {
     #[inline]
-    fn lt(&self, other: &RingBuf<T>) -> bool {
-        self.iter().zip(other.iter()).all(|(a, b)| a.lt(b))
-            && self.len < other.len
+    fn partial_cmp(&self, other: &RingBuf<T>) -> Option<Ordering> {
+        let (a1, a2): (&[T], &[T]) = self.as_slices();
+        let (b1, b2): (&[T], &[T]) = other.as_slices();
+        match a1.partial_cmp(&b1) {
+            Some(Equal) => a2.partial_cmp(&b2),
+            other => other
+        }
     }
 }
 
