@@ -99,10 +99,8 @@ impl<T> RingBuf<T> {
         } else if capacity == 0 {
             RingBuf { lo: 0, len: 0, cap: 0, ptr: 0 as *mut T }
         } else {
-            let size = capacity.checked_mul(&mem::size_of::<T>())
-                               .expect("capacity overflow");
-            let ptr = unsafe { allocate(size, mem::min_align_of::<T>()) };
-            RingBuf { lo: 0, len: 0, cap: capacity, ptr: ptr as *mut T }
+            let ptr: *mut T = unsafe { alloc(capacity) };
+            RingBuf { lo: 0, len: 0, cap: capacity, ptr: ptr }
         }
     }
 
@@ -629,20 +627,14 @@ impl<T:Clone> Clone for RingBuf<T> {
 
 impl<T> FromIterator<T> for RingBuf<T> {
     fn from_iter<I:Iterator<T>>(mut iterator: I) -> RingBuf<T> {
-        let (lower, _) = iterator.size_hint();
-        let mut ringbuf = RingBuf::with_capacity(lower);
-        for element in iterator {
-            ringbuf.push_back(element)
-        }
-        ringbuf
+        RingBuf::from_vec(iterator.collect())
     }
 }
 
 impl<T> Extendable<T> for RingBuf<T> {
     fn extend<I: Iterator<T>>(&mut self, mut iterator: I) {
-        let len = self.len;
         let (lower, _) = iterator.size_hint();
-        self.reserve_additional(len + lower);
+        self.reserve_additional(lower);
         for element in iterator {
             self.push_back(element)
         }
