@@ -23,9 +23,7 @@ use std::mem;
 use std::num;
 use std::ptr;
 use std::raw::Slice;
-use std::rt::heap::{allocate, deallocate};
 use std::slice;
-use std::uint;
 
 /// RingBuf is a circular buffer that implements Deque.
 ///
@@ -97,14 +95,8 @@ impl<T> RingBuf<T> {
     /// let ring: RingBuf<int> = RingBuf::with_capacity(10);
     /// ```
     pub fn with_capacity(capacity: uint) -> RingBuf<T> {
-        if mem::size_of::<T>() == 0 {
-            RingBuf { lo: 0, len: 0, cap: uint::MAX, ptr: 0 as *mut T }
-        } else if capacity == 0 {
-            RingBuf { lo: 0, len: 0, cap: 0, ptr: 0 as *mut T }
-        } else {
-            let ptr: *mut T = unsafe { alloc(capacity) };
-            RingBuf { lo: 0, len: 0, cap: capacity, ptr: ptr }
-        }
+        let ptr: *mut T = unsafe { alloc(capacity) };
+        RingBuf { lo: 0, len: 0, cap: capacity, ptr: ptr }
     }
 
     /// Constructs a new `RingBuf` from the elements in a `Vec`.
@@ -662,19 +654,16 @@ impl<T> Extendable<T> for RingBuf<T> {
 // FIXME: #13996: need a way to mark the return value as `noalias`
 #[inline(never)]
 unsafe fn alloc<T>(capacity: uint) -> *mut T {
-    let size = capacity.checked_mul(&mem::size_of::<T>())
-                       .expect("capacity overflow");
-    allocate(size, mem::min_align_of::<T>()) as *mut T
+    let mut vec = Vec::<T>::with_capacity(capacity);
+    let ptr = vec.as_mut_ptr();
+    mem::forget(vec);
+    ptr
 }
 
 /// Deallocate a buffer of the provided capacity.
 #[inline]
 unsafe fn dealloc<T>(ptr: *mut T, capacity: uint) {
-    if mem::size_of::<T>() != 0 {
-        deallocate(ptr as *mut u8,
-                   capacity * mem::size_of::<T>(),
-                   mem::min_align_of::<T>())
-    }
+    Vec::from_raw_parts(0, capacity, ptr);
 }
 
 impl<T> RingBuf<T> {
