@@ -32,17 +32,18 @@ use std::uint;
 /// # Examples
 ///
 /// ```rust
+/// # use std::collections::{RingBuf, Deque};
 /// let mut ringbuf = RingBuf::new();
-/// ringbuf.push_front(1);
+/// ringbuf.push_front(1i);
 /// ringbuf.push_back(2);
 ///
 /// assert_eq!(ringbuf.len(), 2);
 /// assert_eq!(ringbuf.get(0), &1);
-/// assert_eq!(ringbuf.front(), &1);
-/// assert_eq!(ringbuf.back(), &2);
+/// assert_eq!(ringbuf.front(), Some(&1));
+/// assert_eq!(ringbuf.back(), Some(&2));
 ///
-/// assert_eq!(vec.pop_back(), Some(2));
-/// assert_eq!(vec.len(), 1);
+/// assert_eq!(ringbuf.pop_back(), Some(2));
+/// assert_eq!(ringbuf.len(), 1);
 /// ```
 #[unsafe_no_drop_flag]
 pub struct RingBuf<T> {
@@ -77,6 +78,7 @@ impl<T> RingBuf<T> {
     /// # Example
     ///
     /// ```rust
+    /// # use std::collections::RingBuf;
     /// let mut ringbuf: RingBuf<int> = RingBuf::new();
     /// ```
     pub fn new() -> RingBuf<T> {
@@ -91,6 +93,7 @@ impl<T> RingBuf<T> {
     /// # Example
     ///
     /// ```rust
+    /// # use std::collections::RingBuf;
     /// let ring: RingBuf<int> = RingBuf::with_capacity(10);
     /// ```
     pub fn with_capacity(capacity: uint) -> RingBuf<T> {
@@ -112,7 +115,8 @@ impl<T> RingBuf<T> {
     /// # Example
     ///
     /// ```rust
-    /// let mut vec = vec!(1, 2, 3);
+    /// # use std::collections::RingBuf;
+    /// let mut vec = vec![1i, 2, 3];
     /// let ringbuf = RingBuf::from_vec(vec);
     /// ```
     pub fn from_vec(mut vec: Vec<T>) -> RingBuf<T> {
@@ -131,10 +135,12 @@ impl<T> RingBuf<T> {
     /// # Example
     ///
     /// ```rust
+    /// # use std::collections::{RingBuf, Deque};
     /// let mut ringbuf = RingBuf::new();
-    /// ringbuf.push_front(1);
+    /// ringbuf.push_front(1i);
     /// ringbuf.push_back(2);
     /// let vec = ringbuf.into_vec();
+    /// assert_eq!(&[1, 2], vec.as_slice());
     /// ```
     pub fn into_vec(mut self) -> Vec<T> {
         self.reset();
@@ -154,7 +160,8 @@ impl<T> RingBuf<T> {
     /// Fails if `index` is out of bounds.
     ///
     /// ```rust
-    /// let ringbuf = RingBuff::from_vec(vec!(1, 2, 3));
+    /// # use std::collections::RingBuf;
+    /// let ringbuf = RingBuf::from_vec(vec![1i, 2, 3]);
     /// assert!(ringbuf.get(1) == &2);
     /// ```
     pub fn get<'a>(&'a self, index: uint) -> &'a T {
@@ -170,9 +177,10 @@ impl<T> RingBuf<T> {
     /// Fails if `index` is out of bounds
     ///
     /// ```rust
-    /// let mut ringbuf = RingBuff::from_vec(vec!(1, 2, 3));
+    /// # use std::collections::RingBuf;
+    /// let mut ringbuf = RingBuf::from_vec(vec![1i, 2, 3]);
     /// *ringbuf.get_mut(1) = 4;
-    /// assert_eq!(ringbuf.get(1), 4);
+    /// assert_eq!(ringbuf.get(1), &4);
     /// ```
     pub fn get_mut<'a>(&'a mut self, index: uint) -> &'a mut T {
         assert!(index < self.len);
@@ -197,7 +205,7 @@ impl<T> RingBuf<T> {
         }
     }
 
-    /// Shorten a ring buffer, dropping excess elements.
+    /// Shorten a ring buffer, dropping excess elements from the end.
     ///
     /// If `len` is greater than the ring buffer's current length, this has no
     /// effect.
@@ -205,21 +213,13 @@ impl<T> RingBuf<T> {
     /// # Example
     ///
     /// ```rust
-    /// let mut ringbuf = RingBuf::from_vec(vec!(1, 2, 3, 4));
-    /// vec.truncate(2);
-    /// assert_eq!(vec, vec!(1, 2));
+    /// # use std::collections::RingBuf;
+    /// let mut ringbuf = RingBuf::from_vec(vec![1i, 2, 3, 4]);
+    /// ringbuf.truncate(2);
+    /// assert_eq!(ringbuf.into_vec(), vec![1i, 2]);
     /// ```
     pub fn truncate(&mut self, len: uint) {
-        unsafe {
-            // drop any extra elements
-            while len < self.len {
-                // decrement len before the read(), so a failure on Drop doesn't
-                // re-drop the just-failed value.
-                self.len -= 1;
-                let offset = self.get_offset(self.len) as int;
-                ptr::read(self.ptr.offset(offset) as *const T);
-            }
-        }
+        for _ in range(len, self.len) { self.pop_back(); }
     }
 
     /// Work with `self` as a pair of slices.
@@ -229,10 +229,13 @@ impl<T> RingBuf<T> {
     /// # Example
     ///
     /// ```rust
+    /// # use std::collections::{RingBuf, Deque};
     /// let mut rb = RingBuf::new();
-    /// rb.push_back(1);
+    /// rb.push_back(1i);
     /// rb.push_front(0);
     /// let (slice1, slice2) = rb.as_slices();
+    /// assert_eq!(slice1, &[0]);
+    /// assert_eq!(slice2, &[1]);
     /// ```
     #[inline]
     pub fn as_slices<'a>(&'a self) -> (&'a [T], &'a [T]) {
@@ -250,10 +253,13 @@ impl<T> RingBuf<T> {
     /// # Example
     ///
     /// ```rust
+    /// # use std::collections::{RingBuf, Deque};
     /// let mut rb = RingBuf::new();
-    /// rb.push_front(1);
+    /// rb.push_front(1i);
     /// rb.push_back(2);
     /// let (slice1, slice2) = rb.as_mut_slices();
+    /// assert_eq!(slice1, &[1]);
+    /// assert_eq!(slice2, &[2]);
     /// ```
     #[inline]
     pub fn as_mut_slices<'a>(&'a mut self) -> (&'a mut [T], &'a mut [T]) {
@@ -270,7 +276,8 @@ impl<T> RingBuf<T> {
     /// # Example
     ///
     /// ```rust
-    /// let ringbuf = RingBuff::from_vec(vec!(1, 2, 3));
+    /// # use std::collections::RingBuf;
+    /// let ringbuf = RingBuf::from_vec(vec![1i, 2, 3]);
     /// for &num in ringbuf.iter() {
     ///     println!("{}", num);
     /// }
@@ -287,7 +294,8 @@ impl<T> RingBuf<T> {
     /// # Example
     ///
     /// ```rust
-    /// let mut ringbuf = RingBuff::from_vec(vec!(1, 2, 3));
+    /// # use std::collections::RingBuf;
+    /// let mut ringbuf = RingBuf::from_vec(vec![1i, 2, 3]);
     /// for num in ringbuf.mut_iter() {
     ///     *num = 0;
     /// }
@@ -300,13 +308,13 @@ impl<T> RingBuf<T> {
 
 
     /// Creates a consuming iterator, that is, one that moves each
-    /// value out of the ringbuf (from front to back). The ringbuf cannot
-    /// be used after calling this.
+    /// value out of the ringbuf (from front to back).
     ///
     /// # Example
     ///
     /// ```rust
-    /// let rb = RingBuf::new();
+    /// # use std::collections::{RingBuf, Deque};
+    /// let mut rb = RingBuf::new();
     /// rb.push_back("a".to_string());
     /// rb.push_back("b".to_string());
     /// for s in rb.move_iter() {
@@ -331,6 +339,7 @@ impl<T> RingBuf<T> {
     /// # Example
     ///
     /// ```rust
+    /// # use std::collections::RingBuf;
     /// let ringbuf: RingBuf<int> = RingBuf::with_capacity(10);
     /// assert_eq!(ringbuf.capacity(), 10);
     /// ```
@@ -349,6 +358,7 @@ impl<T> RingBuf<T> {
     /// # Example
     ///
     /// ```rust
+    /// # use std::collections::RingBuf;
     /// let mut ringbuf: RingBuf<int> = RingBuf::with_capacity(1);
     /// ringbuf.reserve_additional(10);
     /// assert!(ringbuf.capacity() >= 11);
@@ -372,7 +382,8 @@ impl<T> RingBuf<T> {
     /// # Example
     ///
     /// ```rust
-    /// let mut ringbuf = RingBuf::new();
+    /// # use std::collections::RingBuf;
+    /// let mut ringbuf = RingBuf::<int>::new();
     /// ringbuf.reserve(10);
     /// assert!(ringbuf.capacity() >= 10);
     /// ```
@@ -389,6 +400,7 @@ impl<T> RingBuf<T> {
     /// # Example
     ///
     /// ```rust
+    /// # use std::collections::RingBuf;
     /// let mut ringbuf: RingBuf<int> = RingBuf::with_capacity(10);
     /// ringbuf.reserve_exact(11);
     /// assert_eq!(ringbuf.capacity(), 11);
@@ -404,8 +416,9 @@ impl<T> RingBuf<T> {
     /// # Example
     ///
     /// ```rust
+    /// # use std::collections::{RingBuf, Deque};
     /// let mut ringbuf = RingBuf::new();
-    /// ringbuf.push_back(1);
+    /// ringbuf.push_back(1i);
     /// ringbuf.shrink_to_fit();
     /// ```
     pub fn shrink_to_fit(&mut self) {
@@ -460,8 +473,9 @@ impl<T> Deque<T> for RingBuf<T> {
     /// # Example
     ///
     /// ```rust
+    /// # use std::collections::{RingBuf, Deque};
     /// let mut ringbuf = RingBuf::new();
-    /// ringbuf.push_back(1);
+    /// ringbuf.push_back(1i);
     /// assert_eq!(Some(&1), ringbuf.back());
     /// ```
     #[inline]
@@ -495,8 +509,9 @@ impl<T> Deque<T> for RingBuf<T> {
     /// # Example
     ///
     /// ```rust
+    /// # use std::collections::{RingBuf, Deque};
     /// let mut ringbuf = RingBuf::new();
-    /// ringbuf.push_back(1);
+    /// ringbuf.push_back(1i);
     /// assert_eq!(Some(&1), ringbuf.front());
     /// ```
     #[inline]
@@ -528,8 +543,9 @@ impl<T> Deque<T> for RingBuf<T> {
     /// # Example
     ///
     /// ```rust
+    /// # use std::collections::{RingBuf, Deque};
     /// let mut ringbuf = RingBuf::new();
-    /// ringbuf.push_back(1);
+    /// ringbuf.push_back(1i);
     /// assert_eq!(Some(1), ringbuf.pop_back());
     /// assert_eq!(None, ringbuf.pop_back());
     /// ```
@@ -552,8 +568,9 @@ impl<T> Deque<T> for RingBuf<T> {
     /// # Example
     ///
     /// ```rust
+    /// # use std::collections::{RingBuf, Deque};
     /// let mut ringbuf = RingBuf::new();
-    /// ringbuf.push_back(1);
+    /// ringbuf.push_back(1i);
     /// assert_eq!(Some(1), ringbuf.pop_front());
     /// assert_eq!(None, ringbuf.pop_front());
     /// ```
@@ -852,12 +869,14 @@ impl<T: PartialEq> PartialEq for RingBuf<T> {
 impl<T: PartialOrd> PartialOrd for RingBuf<T> {
     #[inline]
     fn partial_cmp(&self, other: &RingBuf<T>) -> Option<Ordering> {
-        let (a1, a2): (&[T], &[T]) = self.as_slices();
-        let (b1, b2): (&[T], &[T]) = other.as_slices();
-        match a1.partial_cmp(&b1) {
-            Some(Equal) => a2.partial_cmp(&b2),
-            other => other
+        for (a, b) in self.iter().zip(other.iter()) {
+            let cmp = a.partial_cmp(b);
+            if cmp != Some(Equal) {
+                return cmp;
+            }
         }
+
+        Some(self.len.cmp(&other.len))
     }
 }
 
@@ -866,13 +885,7 @@ impl<T: Eq> Eq for RingBuf<T> {}
 impl<T: Ord> Ord for RingBuf<T> {
     #[inline]
     fn cmp(&self, other: &RingBuf<T>) -> Ordering {
-        for (a, b) in self.iter().zip(other.iter()) {
-            let cmp = a.cmp(b);
-            if cmp != Equal {
-                return cmp;
-            }
-        }
-        self.len.cmp(&other.len)
+        self.partial_cmp(other).expect("No ordering for Ord elements.")
     }
 }
 
@@ -985,7 +998,7 @@ mod checks {
         }
 
         fn shrink(&self) -> Box<Shrinker<RingBuf<A>>> {
-            let mut xs: Vec<RingBuf<A>> = vec!();
+            let mut xs: Vec<RingBuf<A>> = vec![];
 
             // Add versions with varying offsets
             let mut lo = self.lo;
@@ -1129,6 +1142,18 @@ mod checks {
     fn check_move_iter() {
         fn prop(rb: RingBuf<int>) -> bool {
             rb.clone().move_iter().zip(rb.into_vec().move_iter()).all(|(a, b)| a == b)
+        }
+
+        quickcheck(prop);
+    }
+
+    #[test]
+    fn check_truncate() {
+        fn prop(mut rb: RingBuf<int>, len: uint) -> bool {
+            let mut vec = rb.clone().into_vec();
+            vec.truncate(len);
+            rb.truncate(len);
+            RingBuf::from_vec(vec) == rb
         }
 
         quickcheck(prop);
