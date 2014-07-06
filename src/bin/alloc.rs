@@ -1,11 +1,10 @@
-#![crate_id = "sort-bench"]
+#![crate_id = "alloc-bench"]
 #![crate_type = "bin"]
 
 extern crate debug;
 extern crate test;
 extern crate core;
 
-extern crate sort;
 extern crate criterion;
 
 use std::rt::heap::{allocate, reallocate, deallocate, reallocate_inplace};
@@ -16,12 +15,53 @@ use criterion::{Bencher, Criterion};
 
 fn main() {
   let mut b = Criterion::new();
-  let sizes = &[131072];
-  b.bench_group("realloc", sizes, realloc);
-  b.bench_group("realloc_manual", sizes, realloc_manual);
-  b.bench_group("realloc_manual_on_fail", sizes, realloc_manual_on_fail);
+  let sizes = &[8, 128, 1024, 131072];
+  b.bench_group("alloc", sizes, alloc_vec);
+  //b.bench_group("alloc_vec", sizes, alloc_vec);
+  //b.bench_group("realloc", sizes, realloc);
+  //b.bench_group("realloc_manual", sizes, realloc_manual);
+  //b.bench_group("realloc_manual_on_fail", sizes, realloc_manual_on_fail);
 }
 
+#[allow(dead_code)]
+fn alloc(b: &mut Bencher, n: uint) {
+  let alignment = mem::min_align_of::<u8>();
+  b.iter(|| {
+    unsafe {
+      let ptr = allocate(n, alignment);
+
+      for i in range(0, n) {
+        let slot = ptr.offset(i as int);
+        ptr::write(&mut *slot, i as u8);
+      }
+
+      test::black_box(&ptr);
+      deallocate(ptr, n * 2, alignment);
+    }
+  })
+}
+
+#[allow(dead_code)]
+fn alloc_vec(b: &mut Bencher, n: uint) {
+  b.iter(|| {
+    unsafe {
+      let mut vec = Vec::with_capacity(n);
+      let mut ptr = vec.as_mut_ptr();
+      mem::forget(vec);
+
+      for i in range(0, n) {
+        let slot = ptr.offset(i as int);
+        ptr::write(&mut *slot, i as u8);
+      }
+
+      test::black_box(&mut ptr);
+      Vec::from_raw_parts(0, n, ptr);
+    }
+  })
+}
+
+
+#[allow(dead_code)]
 fn realloc(b: &mut Bencher, n: uint) {
   let alignment = mem::min_align_of::<u8>();
   b.iter(|| {
@@ -41,6 +81,7 @@ fn realloc(b: &mut Bencher, n: uint) {
   })
 }
 
+#[allow(dead_code)]
 fn realloc_manual(b: &mut Bencher, n: uint) {
   b.iter(|| {
     let alignment = mem::min_align_of::<u8>();
@@ -53,7 +94,7 @@ fn realloc_manual(b: &mut Bencher, n: uint) {
       }
 
       let ptr2 = allocate(2 * n, alignment);
-      ptr::copy_nonoverlapping_memory(ptr2, ptr as *u8, n);
+      ptr::copy_nonoverlapping_memory(ptr2, ptr as *const u8, n);
 
       deallocate(ptr, n, alignment);
 
@@ -63,6 +104,7 @@ fn realloc_manual(b: &mut Bencher, n: uint) {
   })
 }
 
+#[allow(dead_code)]
 fn realloc_manual_on_fail(b: &mut Bencher, n: uint) {
   b.iter(|| {
     let alignment = mem::min_align_of::<u8>();
@@ -77,7 +119,7 @@ fn realloc_manual_on_fail(b: &mut Bencher, n: uint) {
       let inplace = reallocate_inplace(ptr, 2 * n, alignment, n);
       if !inplace {
         let temp = allocate(2 * n, alignment);
-        ptr::copy_nonoverlapping_memory(temp, ptr as *u8, n);
+        ptr::copy_nonoverlapping_memory(temp, ptr as *const u8, n);
 
         deallocate(ptr, n, alignment);
         ptr = temp;

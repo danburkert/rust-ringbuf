@@ -10,6 +10,9 @@ name = "ringbuf"
 [[bin]]
 name = "bench"
 
+[[bin]]
+name = "alloc"
+
 [dependencies.criterion]
 git = "https://github.com/danburkert/criterion.rs.git"
 
