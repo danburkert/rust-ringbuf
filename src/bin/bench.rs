@@ -12,8 +12,8 @@ extern crate criterion;
 
 // Switch from benchmarking the stdlib implementation to the new
 // implementation by changing the import
-use collections::RingBuf;
-//use ringbuf::RingBuf;
+//use collections::RingBuf;
+use ringbuf::RingBuf;
 
 use collections::Deque;
 use std::rand::Rng;
