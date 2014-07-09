@@ -1147,4 +1147,19 @@ mod checks {
 
         quickcheck(prop);
     }
+
+    #[test]
+    fn check_drop_items() {
+        // This is testing memory safety
+        fn prop(vec: Vec<int>) -> bool {
+            let len = vec.len();
+            let mut rb: RingBuf<Box<int>> = RingBuf::new();
+            for item in vec.move_iter() {
+                rb.push_back(box item);
+            }
+            rb.len() == len
+        }
+
+        quickcheck(prop);
+    }
 }
