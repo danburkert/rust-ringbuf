@@ -864,7 +864,6 @@ impl<T: PartialOrd> PartialOrd for RingBuf<T> {
                 return cmp;
             }
         }
-
         Some(self.len.cmp(&other.len))
     }
 }
@@ -874,7 +873,13 @@ impl<T: Eq> Eq for RingBuf<T> {}
 impl<T: Ord> Ord for RingBuf<T> {
     #[inline]
     fn cmp(&self, other: &RingBuf<T>) -> Ordering {
-        self.partial_cmp(other).expect("No ordering for Ord elements.")
+        for (a, b) in self.iter().zip(other.iter()) {
+            let cmp = a.cmp(b);
+            if cmp != Equal {
+                return cmp;
+            }
+        }
+        self.len.cmp(&other.len)
     }
 }
 
@@ -894,14 +899,11 @@ impl<T: fmt::Show> fmt::Show for RingBuf<T> {
 #[unsafe_destructor]
 impl<T> Drop for RingBuf<T> {
     fn drop(&mut self) {
-        if self.cap != 0 {
-            unsafe {
-                for x in self.iter() {
-                    ptr::read(x);
-                }
-
-                dealloc(self.ptr, self.cap)
+        unsafe {
+            for x in self.iter() {
+                ptr::read(x);
             }
+            dealloc(self.ptr, self.cap);
         }
     }
 }
@@ -940,11 +942,9 @@ impl<T> DoubleEndedIterator<T> for MoveItems<T> {
 impl<T> Drop for MoveItems<T> {
     fn drop(&mut self) {
         // destroy the remaining elements
-        if self.cap != 0 {
-            for _x in *self {}
-            unsafe {
-                dealloc(self.allocation, self.cap);
-            }
+        for _ in *self {}
+        unsafe {
+            dealloc(self.allocation, self.cap);
         }
     }
 }
@@ -969,13 +969,13 @@ mod checks {
                                            capacity: uint,
                                            lo: uint)
                                            -> RingBuf<T> {
-            let mut ringbuf = RingBuf::with_capacity(capacity);
-            ringbuf.lo = if capacity == 0 { 0 } else { lo % capacity };
-            for &i in items.iter() {
-                ringbuf.push_back(i);
-            }
-            ringbuf
+        let mut ringbuf = RingBuf::with_capacity(capacity);
+        ringbuf.lo = if capacity == 0 { 0 } else { lo % capacity };
+        for &i in items.iter() {
+            ringbuf.push_back(i);
         }
+        ringbuf
+    }
 
     impl<A: Copy + Arbitrary> Arbitrary for RingBuf<A> {
         fn arbitrary<G: Gen>(g: &mut G) -> RingBuf<A> {

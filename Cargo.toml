@@ -14,7 +14,7 @@ name = "bench"
 name = "alloc"
 
 [dependencies.criterion]
-git = "https://github.com/danburkert/criterion.rs.git"
+git = "https://github.com/japaric/criterion.rs"
 
 [dependencies.quickcheck]
-git = "https://github.com/BurntSushi/quickcheck.git"
+git = "https://github.com/BurntSushi/quickcheck"

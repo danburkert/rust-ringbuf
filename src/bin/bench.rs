@@ -1,6 +1,5 @@
-#![crate_id = "ringbuf-bench"]
+#![crate_name = "ringbuf-bench"]
 #![crate_type = "bin"]
-
 
 extern crate debug;
 extern crate test;
@@ -24,7 +23,7 @@ use criterion::{Bencher, Criterion};
 
 #[allow(dead_code)]
 fn main() {
-    let mut b = Criterion::new();
+    let mut b = Criterion::default();
     let capacities = &[8, 128, 1024, 32 * 1024];
     b.bench_group("push_back_default_allocate", capacities, push_back_default_allocate);
     b.bench_group("push_back_pre_allocate", capacities, push_back_pre_allocate);

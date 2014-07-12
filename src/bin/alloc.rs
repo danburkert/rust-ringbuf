@@ -1,4 +1,4 @@
-#![crate_id = "alloc-bench"]
+#![crate_name = "alloc-bench"]
 #![crate_type = "bin"]
 
 extern crate debug;
@@ -13,8 +13,9 @@ use std::ptr;
 
 use criterion::{Bencher, Criterion};
 
+#[allow(dead_code)]
 fn main() {
-  let mut b = Criterion::new();
+  let mut b = Criterion::default();
   let sizes = &[8, 128, 1024, 32 * 1024];
   b.bench_group("alloc", sizes, alloc);
   b.bench_group("alloc", sizes, alloc_vec);
