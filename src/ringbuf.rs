@@ -417,6 +417,15 @@ impl<T> RingBuf<T> {
         let len = self.len;
         self.resize(len);
     }
+
+    /// Sets the length of a ring buffer.
+    ///
+    /// This will explicitly set the size of the vector, without actually
+    /// modifying its buffers, so it is up to the caller to ensure that the
+    /// vector is actually the specified size.
+    pub unsafe fn set_len(&mut self, len: uint) {
+        self.len = len;
+    }
 }
 
 impl<T> Collection for RingBuf<T> {
