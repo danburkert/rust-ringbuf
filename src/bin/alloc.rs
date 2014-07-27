@@ -15,10 +15,10 @@ use criterion::{Bencher, Criterion};
 
 #[allow(dead_code)]
 fn main() {
-  let mut b = Criterion::default();
-  let sizes = &[8, 128, 1024, 32 * 1024];
-  b.bench_group("alloc", sizes, alloc);
-  b.bench_group("alloc", sizes, alloc_vec);
+  //let mut b = Criterion::default();
+  //let sizes = &[8, 128, 1024, 32 * 1024];
+  //b.bench_group("alloc", sizes, alloc);
+  //b.bench_group("alloc", sizes, alloc_vec);
   //b.bench_group("alloc-vec-no-forget", sizes, alloc_vec_no_forget);
   //b.bench_group("alloc_vec", sizes, alloc_vec);
   //b.bench_group("realloc", sizes, realloc);
