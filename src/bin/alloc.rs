@@ -1,6 +1,3 @@
-#![crate_name = "alloc-bench"]
-#![crate_type = "bin"]
-
 extern crate debug;
 extern crate test;
 extern crate core;

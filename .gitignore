@@ -21,4 +21,4 @@
 *.app
 *.rlib
 target/*
-metrics.json
+.criterion

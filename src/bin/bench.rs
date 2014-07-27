@@ -1,6 +1,3 @@
-#![crate_name = "ringbuf-bench"]
-#![crate_type = "bin"]
-
 extern crate debug;
 extern crate test;
 extern crate core;

@@ -5,6 +5,7 @@
 // except according to those terms.
 //
 #![feature(unsafe_destructor)]
+#![feature(default_type_params)]
 
 extern crate quickcheck;
 
@@ -17,6 +18,7 @@ use std::cmp;
 use std::collections::Deque;
 use std::default::Default;
 use std::fmt;
+use std::hash::{Writer, Hash};
 use std::iter::Chain;
 use std::iter::FromIterator;
 use std::mem;
@@ -316,13 +318,7 @@ impl<T> RingBuf<T> {
     /// ```
     #[inline]
     pub fn move_iter(self) -> MoveItems<T> {
-        unsafe {
-            let iter = mem::transmute(self.iter());
-            let ptr = self.ptr;
-            let cap = self.cap;
-            mem::forget(self);
-            MoveItems { allocation: ptr, cap: cap, iter: iter }
-        }
+        MoveItems { ringbuf: self }
     }
 
     /// Returns the number of elements the ringbuf can hold without
@@ -465,42 +461,6 @@ impl<T> Deque<T> for RingBuf<T> {
         if len > 0 { Some(self.get_mut(len - 1)) } else { None }
     }
 
-    /// Append an element to a ring buffer.
-    ///
-    /// # Failure
-    ///
-    /// Fails if the number of elements in the ring buffer overflows a `uint`.
-    ///
-    /// # Example
-    ///
-    /// ```rust
-    /// # use std::collections::{RingBuf, Deque};
-    /// let mut ringbuf = RingBuf::new();
-    /// ringbuf.push_back(1i);
-    /// assert_eq!(Some(&1), ringbuf.back());
-    /// ```
-    #[inline]
-    fn push_back(&mut self, value: T) {
-        if mem::size_of::<T>() == 0 {
-            // zero-size types consume no memory, so we can't rely on the
-            // address space running out
-            self.len = self.len.checked_add(&1).expect("length overflow");
-            unsafe { mem::forget(value); }
-            return
-        }
-        if self.len == self.cap {
-            let capacity = cmp::max(self.len, 1) * 2;
-            self.resize(capacity);
-        }
-
-        unsafe {
-            let offset = self.get_back_offset() as int;
-            let slot = self.ptr.offset(offset);
-            ptr::write(slot, value);
-            self.len += 1;
-        }
-    }
-
     /// Prepend an element to a ring buffer.
     ///
     /// # Failure
@@ -538,31 +498,6 @@ impl<T> Deque<T> for RingBuf<T> {
         }
     }
 
-    /// Remove the last element from a ring buffer and return it, or `None` if
-    /// it is empty.
-    ///
-    /// # Example
-    ///
-    /// ```rust
-    /// # use std::collections::{RingBuf, Deque};
-    /// let mut ringbuf = RingBuf::new();
-    /// ringbuf.push_back(1i);
-    /// assert_eq!(Some(1), ringbuf.pop_back());
-    /// assert_eq!(None, ringbuf.pop_back());
-    /// ```
-    #[inline]
-    fn pop_back(&mut self) -> Option<T> {
-        if self.len == 0 {
-            None
-        } else {
-            unsafe {
-                let offset = self.get_offset(self.len - 1) as int;
-                self.len -= 1;
-                Some(ptr::read(self.ptr.offset(offset) as *const T))
-            }
-        }
-    }
-
     /// Remove the first element from a ring buffer and return it, or `None` if
     /// it is empty.
     ///
@@ -589,6 +524,70 @@ impl<T> Deque<T> for RingBuf<T> {
         }
     }
 }
+
+impl<T> MutableSeq<T> for RingBuf<T> {
+    /// Append an element to a ring buffer.
+    ///
+    /// # Failure
+    ///
+    /// Fails if the number of elements in the ring buffer overflows a `uint`.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// # use std::collections::{RingBuf, Deque};
+    /// let mut ringbuf = RingBuf::new();
+    /// ringbuf.push_back(1i);
+    /// assert_eq!(Some(&1), ringbuf.back());
+    /// ```
+    #[inline]
+    fn push(&mut self, value: T) {
+        if mem::size_of::<T>() == 0 {
+            // zero-size types consume no memory, so we can't rely on the
+            // address space running out
+            self.len = self.len.checked_add(&1).expect("length overflow");
+            unsafe { mem::forget(value); }
+            return
+        }
+        if self.len == self.cap {
+            let capacity = cmp::max(self.len, 1) * 2;
+            self.resize(capacity);
+        }
+
+        unsafe {
+            let offset = self.get_back_offset() as int;
+            let slot = self.ptr.offset(offset);
+            ptr::write(slot, value);
+            self.len += 1;
+        }
+    }
+
+    /// Remove the last element from a ring buffer and return it, or `None` if
+    /// it is empty.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// # use std::collections::{RingBuf, Deque};
+    /// let mut ringbuf = RingBuf::new();
+    /// ringbuf.push_back(1i);
+    /// assert_eq!(Some(1), ringbuf.pop_back());
+    /// assert_eq!(None, ringbuf.pop_back());
+    /// ```
+    #[inline]
+    fn pop(&mut self) -> Option<T> {
+        if self.len == 0 {
+            None
+        } else {
+            unsafe {
+                let offset = self.get_offset(self.len - 1) as int;
+                self.len -= 1;
+                Some(ptr::read(self.ptr.offset(offset) as *const T))
+            }
+        }
+    }
+}
+
 
 impl<T> Default for RingBuf<T> {
     #[inline]
@@ -892,6 +891,15 @@ impl<T: Ord> Ord for RingBuf<T> {
     }
 }
 
+impl<S: Writer, A: Hash<S>> Hash<S> for RingBuf<A> {
+    fn hash(&self, state: &mut S) {
+        self.len().hash(state);
+        for elt in self.iter() {
+            elt.hash(state);
+        }
+    }
+}
+
 impl<T: fmt::Show> fmt::Show for RingBuf<T> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         try!(write!(f, "["));
@@ -919,42 +927,25 @@ impl<T> Drop for RingBuf<T> {
 
 /// An iterator that moves out of a RingBuf.
 pub struct MoveItems<T> {
-    allocation: *mut T, // the block of memory allocated for the ringbuf
-    cap: uint, // the capacity of the ringbuf
-    iter: Items<'static, T>
+    ringbuf: RingBuf<T>
 }
 
 impl<T> Iterator<T> for MoveItems<T> {
     #[inline]
     fn next(&mut self) -> Option<T> {
-        unsafe {
-            self.iter.next().map(|x| ptr::read(x))
-        }
+        self.ringbuf.pop_front()
     }
 
     #[inline]
     fn size_hint(&self) -> (uint, Option<uint>) {
-        self.iter.size_hint()
+        (self.ringbuf.len(), Some(self.ringbuf.len()))
     }
 }
 
 impl<T> DoubleEndedIterator<T> for MoveItems<T> {
     #[inline]
     fn next_back(&mut self) -> Option<T> {
-        unsafe {
-            self.iter.next_back().map(|x| ptr::read(x))
-        }
-    }
-}
-
-#[unsafe_destructor]
-impl<T> Drop for MoveItems<T> {
-    fn drop(&mut self) {
-        // destroy the remaining elements
-        for _ in *self {}
-        unsafe {
-            dealloc(self.allocation, self.cap);
-        }
+        self.ringbuf.pop_back()
     }
 }
 
